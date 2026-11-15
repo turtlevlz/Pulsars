@@ -1,0 +1,48 @@
+/* App shell. The window is a full-height column: the navbar on top and the page growing to fill
+   the rest, so a short page never leaves a blank strip underneath it. The black here also covers
+   what Bulma (loaded from the CDN in index.html) paints white by default. */
+:root,
+body {
+  background: #000;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.app,
+.app__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+/* 404 page, in the same dark style as the sign-in page */
+.error-page {
+  align-items: center;
+  text-align: center;
+}
+
+.error-page__code {
+  font-size: 4.5rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.error-page__title {
+  font-size: 1.25rem;
+}
+
+.error-page__hint {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+.error-page .btn {
+  display: inline-block;
+  margin-top: 6px;
+  color: #fff;
+  text-decoration: none;
+}

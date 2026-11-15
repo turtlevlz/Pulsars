@@ -1,10 +1,6 @@
-const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
+import { currentUserId, getSession, setSession } from "./session";
 
-/**
- * There is no login yet (auth is a later backend phase), so the dashboard acts as one
- * fixed patient. 2 is "Alice" from the backend seed.
- */
-export const USER_ID = Number(import.meta.env.VITE_USER_ID ?? 2);
+const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   readonly status: number;
@@ -20,6 +16,8 @@ type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
+  /** Send the login token (the default). Sign-in and sign-up have none yet. */
+  auth?: boolean;
 };
 
 /** First validation problem from the backend's `{ error, details: [{ message }] }` body. */
@@ -38,13 +36,18 @@ function describe(body: unknown, status: number): string {
 
 export async function request<T>(
   path: string,
-  { method = "GET", body, signal }: RequestOptions = {},
+  { method = "GET", body, signal, auth = true }: RequestOptions = {},
 ): Promise<T> {
+  const token = auth ? getSession()?.token : undefined;
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     });
@@ -54,12 +57,24 @@ export async function request<T>(
   }
 
   if (!res.ok) {
+    // The token expired, was revoked (password change) or the account is gone: sign out, and the
+    // router sends the user to the login page. Only if it is still the token this request used,
+    // so a slow 401 can't sign out a login that happened in the meantime.
+    if (res.status === 401 && token && getSession()?.token === token) setSession(null);
     const parsed: unknown = await res.json().catch(() => null);
     throw new ApiError(res.status, describe(parsed, res.status));
   }
 
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/**
+ * A request under the signed-in user's own `/users/:id`, e.g. `requestForUser("/vitals")`.
+ * Async, so being signed out is a rejected promise like any other failure, not a throw.
+ */
+export async function requestForUser<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>(`/users/${currentUserId()}${path}`, options);
 }
 
 export function errorMessage(err: unknown): string {

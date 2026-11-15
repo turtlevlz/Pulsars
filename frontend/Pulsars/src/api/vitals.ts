@@ -1,4 +1,4 @@
-import { request, USER_ID } from "./client";
+import { requestForUser } from "./client";
 
 /** hr = heart rate, bt = body temperature, bo = blood oxygen (same codes as the backend). */
 export type VitalType = "hr" | "bt" | "bo";
@@ -18,8 +18,7 @@ export type VitalSeries = {
 
 /** The most recent `limit` readings of one vital, oldest first. */
 export function getSeries(type: VitalType, limit: number, signal?: AbortSignal) {
-  return request<VitalSeries>(
-    `/users/${USER_ID}/vitals?type=${type}&limit=${limit}`,
-    { signal },
-  );
+  return requestForUser<VitalSeries>(`/vitals?type=${type}&limit=${limit}`, {
+    signal,
+  });
 }

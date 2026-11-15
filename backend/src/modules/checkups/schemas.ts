@@ -4,7 +4,7 @@ export const idParams = z.object({ id: z.coerce.number().int().positive() });
 
 export const createCheckupBody = z.strictObject({
     userId: z.number().int().positive(), // the patient
-    medicId: z.number().int().positive(),
+    medicId: z.number().int().positive().optional(), // defaults to the signed-in medic; any other id is refused
     name: z.string().trim().min(1).max(100),
     description: z.string().trim().max(2000).optional(),
     dueAt: z.iso
@@ -39,5 +39,7 @@ export const submitAnswersBody = z
     });
 
 export type CreateCheckupBody = z.infer<typeof createCheckupBody>;
+/** What the service needs: the route has filled in `medicId` from the signed-in medic. */
+export type NewCheckup = Omit<CreateCheckupBody, 'medicId'> & { medicId: number };
 export type ListCheckupsQuery = z.infer<typeof listCheckupsQuery>;
 export type SubmitAnswersBody = z.infer<typeof submitAnswersBody>;

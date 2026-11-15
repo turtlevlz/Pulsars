@@ -7,6 +7,7 @@ export class HttpError extends Error {
         public readonly status: number,
         message: string,
         public readonly details?: unknown,
+        public readonly headers?: Record<string, string>,
     ) {
         super(message);
         this.name = 'HttpError';
@@ -20,6 +21,8 @@ export const notFoundHandler: RequestHandler = (req, _res, next) => {
 // Express 5 forwards rejected promises from async handlers here automatically.
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof HttpError) {
+        if (err.headers) res.set(err.headers);
+        if (err.status === 401) res.set('WWW-Authenticate', 'Bearer');
         res.status(err.status).json({ error: err.message, details: err.details });
         return;
     }

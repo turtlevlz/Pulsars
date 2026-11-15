@@ -1,4 +1,3 @@
-import type { VitalStatus } from "../components/VitalCard";
 import type { VitalType } from "../api/vitals";
 
 export type VitalDefinition = {
@@ -10,13 +9,12 @@ export type VitalDefinition = {
   accent: string;
   /** Decimal places shown on the card. */
   decimals: number;
-  /**
-   * Typical resting range for adults, used only to label the card Low / Normal / High.
-   * These are display hints, not medical thresholds. Alerting is a later backend phase.
-   */
-  normal: { min: number; max: number };
 };
 
+/**
+ * The vitals shown on the dashboard. The cards show no Low / Normal / High judgement:
+ * the wearable's readings are demo-grade and there is no clinical threshold behind them.
+ */
 export const VITAL_DEFINITIONS: VitalDefinition[] = [
   {
     id: "heart-rate",
@@ -25,7 +23,6 @@ export const VITAL_DEFINITIONS: VitalDefinition[] = [
     unit: "bpm",
     accent: "#3B82F6",
     decimals: 0,
-    normal: { min: 60, max: 100 },
   },
   {
     id: "body-temp",
@@ -34,7 +31,6 @@ export const VITAL_DEFINITIONS: VitalDefinition[] = [
     unit: "°C",
     accent: "#4F46E5",
     decimals: 1,
-    normal: { min: 36.0, max: 37.5 },
   },
   {
     id: "blood-oxygen",
@@ -43,15 +39,20 @@ export const VITAL_DEFINITIONS: VitalDefinition[] = [
     unit: "%",
     accent: "#4F46E5",
     decimals: 0,
-    normal: { min: 95, max: 100 },
   },
 ];
 
-export function vitalStatus(
-  value: number,
-  { min, max }: VitalDefinition["normal"],
-): VitalStatus {
-  if (value < min) return "Low";
-  if (value > max) return "High";
-  return "Normal";
+/** A reading older than this is shown as stale. The cuff sends about one a second. */
+export const STALE_AFTER_MS = 20_000;
+
+/** "just now", "12 s ago", "3 min ago", ... */
+export function formatAge(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds} s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
 }

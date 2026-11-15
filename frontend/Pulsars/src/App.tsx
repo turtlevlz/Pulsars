@@ -4,13 +4,13 @@ import Navbar from "./components/Navbar";
 
 const App: FC = () => {
   return (
-    <div>
+    <div className="app">
       <header>
         <Navbar />
       </header>
 
       {/* Main Content */}
-      <main>
+      <main className="app__main">
         <Outlet />
       </main>
     </div>

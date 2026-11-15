@@ -45,7 +45,7 @@ export default function SymptomLogPage() {
         </p>
       )}
 
-      <div className="split">
+      <div className="split split--equal">
         <SymptomLog onSave={handleSave} />
         <SymptomHistory
           records={records}

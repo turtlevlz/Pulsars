@@ -9,7 +9,7 @@ const url = process.env.MQTT_URL ?? 'mqtt://localhost:1883';
 // Random walks around a resting baseline, clamped to plausible ranges.
 const state = { hr: 72, bt: 36.7, bo: 97 };
 const step = { hr: 3, bt: 0.1, bo: 0.5 };
-const clamp = { hr: [45, 140], bt: [35.5, 39], bo: [90, 100] } as const;
+const clamp = { hr: [45, 140], bt: [30, 39], bo: [90, 100] } as const;
 
 function next(type: keyof typeof state): number {
     const [lo, hi] = clamp[type];

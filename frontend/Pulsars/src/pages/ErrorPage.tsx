@@ -1,22 +1,19 @@
+import "../styles/Pulsars.css";
+
 const ErrorPage = () => {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center px-4">
-      <h1 className="text-6xl font-bold text-gray-800">404</h1>
-      <p className="mt-4 text-xl text-gray-600">
-        Page not found
-      </p>
-
-      <p className="mt-2 text-gray-500">
-        The page you’re looking for doesn’t exist or has been moved.
-      </p>
-
-      <a
-        href="/"
-        className="mt-6 inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-      >
-        Go back home
-      </a>
-    </div>
+    <main className="auth">
+      <div className="auth__card error-page">
+        <h1 className="error-page__code">404</h1>
+        <p className="error-page__title">Page not found</p>
+        <p className="error-page__hint">
+          The page you’re looking for doesn’t exist or has been moved.
+        </p>
+        <a href="/" className="btn btn--primary">
+          Go back home
+        </a>
+      </div>
+    </main>
   );
 };
 

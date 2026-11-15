@@ -38,8 +38,18 @@ export const seriesQuery = z
     .object({ type: vitalType, ...range, limit: z.coerce.number().int().min(1).max(5000).default(500) })
     .refine(fromBeforeTo, rangeMessage);
 
+// Bucketed averages for the trend charts: `points` is roughly how many buckets are wanted.
+export const trendQuery = z
+    .object({
+        type: vitalType,
+        ...range,
+        points: z.coerce.number().int().min(2).max(240).default(60),
+    })
+    .refine(fromBeforeTo, rangeMessage);
+
 export const summaryQuery = z.object(range).refine(fromBeforeTo, rangeMessage);
 
 export type Reading = z.infer<typeof readingSchema>;
 export type SeriesQuery = z.infer<typeof seriesQuery>;
+export type TrendQuery = z.infer<typeof trendQuery>;
 export type SummaryQuery = z.infer<typeof summaryQuery>;

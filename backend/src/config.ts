@@ -18,6 +18,12 @@ const schema = z.object({
     LLM_MODEL: z.string().min(1).default('llama3.2'),
     LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
+    // Signing key for login tokens (HS256). Keep it secret and stable: changing it logs everyone out.
+    // Generate one with `openssl rand -base64 48`.
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    // How long a login token stays valid.
+    JWT_TTL_HOURS: z.coerce.number().positive().max(24 * 30).default(12),
+
     // A follow-up thread is closed after the assistant has asked this many questions.
     ASSISTANT_MAX_QUESTIONS: z.coerce.number().int().min(1).max(20).default(4),
 });

@@ -390,6 +390,46 @@
 }
 
 /* ---------- Symptom history ---------- */
+/* Two cards side by side at the same height (the form card and the paged history card) */
+.split--equal {
+  align-items: stretch;
+}
+
+/* Bulma gives every card that isn't the last child a bottom margin, which would leave the
+   first card 24px short of the row. */
+.split.split--equal > .card {
+  margin-bottom: 0;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+}
+
+.history__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.history__pager .btn {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.history__pager .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.history__range {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
 .history__list {
   list-style: none;
   margin: 18px 0 0;
@@ -1000,7 +1040,8 @@
   height: 100%;
 }
 
-/* Symptom log: card is a column, the form fills it, the notes box absorbs the slack */
+/* Symptom log: card is a column and the form fills it; the notes box has a fixed, modest
+   height (it used to stretch into all the spare room), and the card scrolls if it can't fit */
 .dashboard__panels .card {
   display: flex;
   flex-direction: column;
@@ -1012,15 +1053,21 @@
   min-height: 0;
 }
 
-.symptom-log__form .field:has(.field__control--textarea) {
-  flex: 1;
-  min-height: 0;
-}
-
 .field__control--textarea {
   flex: 1;
   min-height: 56px;
   resize: none;
+}
+
+/* The notes box is 120px and only gives up height (down to its minimum) when the window is
+   short, so the Save button is never pushed out of view or drawn over it. */
+.symptom-log__form .field:has(.field__control--textarea) {
+  flex: 0 1 auto;
+  min-height: 86px; /* label + the textarea's 56px minimum */
+}
+
+.symptom-log__form .field__control--textarea {
+  flex: 0 1 120px;
 }
 
 /* Checkups list scrolls inside its card instead of growing it */
@@ -1066,4 +1113,98 @@
 /* The assistant's closing message is a short list, so keep its line breaks */
 .bubble {
   white-space: pre-line;
+}
+
+/* ---------- Vital card: freshness ---------- */
+.vital-card__updated {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.pill--quiet {
+  border-color: var(--text-soft);
+  color: var(--text-soft);
+}
+
+.vital-card--stale .vital-card__value,
+.vital-card--stale .vital-card__unit {
+  opacity: 0.5;
+}
+
+/* ---------- Sign in / sign up ---------- */
+.auth {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+.auth__card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth__name {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth__switch {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.auth__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth__link:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+
+/* ---------- Dashboard is exactly one window tall ---------- */
+/* The shell (App.css) hands the page whatever is left under the navbar, so the navbar's height
+   no longer has to be guessed with --nav-h. The panels scroll inside their cards. */
+#root:has(.dashboard) {
+  height: 100dvh;
+}
+
+#root:has(.dashboard) .app,
+#root:has(.dashboard) .app__main {
+  min-height: 0;
+}
+
+.pulsars:has(.dashboard) {
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }

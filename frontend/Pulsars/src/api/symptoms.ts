@@ -1,6 +1,6 @@
 import type { SymptomEntry } from "../components/SymptomLog";
 import type { SymptomRecord } from "../components/SymptomHistory";
-import { request, USER_ID } from "./client";
+import { requestForUser } from "./client";
 
 export type Frequency =
   | "once"
@@ -24,7 +24,7 @@ export type Symptom = {
 export type CreatedSymptom = Symptom & { threadId: number | null };
 
 export function createSymptom({ symptom, severity, frequency, notes }: SymptomEntry) {
-  return request<CreatedSymptom>(`/users/${USER_ID}/symptoms`, {
+  return requestForUser<CreatedSymptom>("/symptoms", {
     method: "POST",
     body: {
       name: symptom,
@@ -38,7 +38,7 @@ export function createSymptom({ symptom, severity, frequency, notes }: SymptomEn
 
 /** Newest first. */
 export function listSymptoms(signal?: AbortSignal) {
-  return request<Symptom[]>(`/users/${USER_ID}/symptoms?limit=50`, { signal });
+  return requestForUser<Symptom[]>("/symptoms?limit=50", { signal });
 }
 
 export function symptomToRecord(symptom: Symptom): SymptomRecord {

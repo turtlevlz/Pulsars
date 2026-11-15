@@ -58,7 +58,13 @@ async function buildPromptContext(threadId: number): Promise<{ ctx: PromptContex
     const vitalsSummary = VITAL_TYPES.flatMap((type) => {
         const s = summary[type];
         if (s.count === 0 || s.avg === null) return [];
-        const label = { hr: 'Heart rate', bt: 'Body temperature', bo: 'Blood oxygen' }[type];
+        // Named after what the wearable really measures, so the model does not treat skin
+        // temperature as core body temperature or the experimental SpO2 as a clinical value.
+        const label = {
+            hr: 'Heart rate',
+            bt: 'Skin temperature (forearm sensor, not core body temperature)',
+            bo: 'Blood oxygen (experimental fingertip sensor)',
+        }[type];
         const round = (n: number | null) => (n === null ? '?' : Math.round(n * 10) / 10);
         return [`${label}: avg ${round(s.avg)} ${VITALS[type].unit} (range ${round(s.min)}-${round(s.max)}, ${s.count} readings)`];
     });

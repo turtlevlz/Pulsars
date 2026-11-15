@@ -1,0 +1,4 @@
+# Local only: the virtualenv, and the device captures (they hold raw sensor readings)
+.venv/
+captures/
+__pycache__/

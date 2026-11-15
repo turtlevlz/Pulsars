@@ -36,10 +36,14 @@ enum MessageRole {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
+  id           Int    @id @default(autoincrement())
   name         String
-  passwordHash String   @map("password_hash")
-  role         Role     @default(patient)
+  // Login identifier. Stored lower-case; uniqueness is what makes it usable for login.
+  email        String @unique
+  passwordHash String @map("password_hash")
+  // Bumped when the password changes, so tokens issued before the change stop working.
+  tokenVersion Int    @default(0) @map("token_version")
+  role         Role   @default(patient)
   weight       Float?
   height       Float?
   age          Int?
@@ -54,14 +58,16 @@ model User {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  heartRates      HeartRate[]
-  bodyTemps       BodyTemp[]
-  bloodOxygens    BloodOxygen[]
-  symptoms        Symptom[]
-  patientCheckups Checkup[]     @relation("PatientCheckups")
-  medicCheckups   Checkup[]     @relation("MedicCheckups")
-  fitnessWindows  FitnessWindow[]
+  heartRates         HeartRate[]
+  bodyTemps          BodyTemp[]
+  bloodOxygens       BloodOxygen[]
+  symptoms           Symptom[]
+  patientCheckups    Checkup[]              @relation("PatientCheckups")
+  medicCheckups      Checkup[]              @relation("MedicCheckups")
+  fitnessWindows     FitnessWindow[]
   routineCompletions RoutineCompletion[]
+  alertAcks          AlertAcknowledgement[] @relation("AlertPatient")
+  alertsAcked        AlertAcknowledgement[] @relation("AlertAcknowledger")
 
   @@map("users")
 }
@@ -210,4 +216,22 @@ model FollowupMessage {
 
   @@index([threadId, createdAt])
   @@map("followup_messages")
+}
+
+// Threshold alerts are worked out from the readings when asked for (modules/alerts), so there is
+// no alert row. This table only records which episodes a medic has acknowledged; an episode is
+// identified by its patient, vital type and the start of its first breaching minute.
+model AlertAcknowledgement {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  type           String   @db.VarChar(2) // hr | bt | bo
+  startedAt      DateTime @map("started_at") @db.Timestamptz(6)
+  acknowledgedBy Int?     @map("acknowledged_by")
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at") @db.Timestamptz(6)
+
+  patient      User  @relation("AlertPatient", fields: [userId], references: [id], onDelete: Cascade)
+  acknowledger User? @relation("AlertAcknowledger", fields: [acknowledgedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, type, startedAt])
+  @@map("alert_acknowledgements")
 }

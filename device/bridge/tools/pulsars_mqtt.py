@@ -1,8 +1,10 @@
 """Map live USB measurements to the Pulsars backend-dev MQTT contract."""
+from collections import deque
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import json
 import math
+import statistics
 import sys
 
 
@@ -13,6 +15,16 @@ VITALS = (
     ("bt", "skin_temp_c", "skin_temp", 30, 45),
 )
 
+# A reading the device cannot vouch for (finger motion, lost contact, a number outside the plausible
+# range) is not dropped. The mean of the last few normal readings is sent in its place, like
+# smoothing out turbulence. Only a few seconds are bridged this way: a longer outage stays a gap, so
+# the dashboard shows the data going stale instead of a flat line made of averages. Readings the
+# device marks "ok" and that are in range are never altered, and the local capture keeps what the
+# device really sent.
+SMOOTHING_WINDOW = 10    # normal readings remembered per metric
+SMOOTHING_MINIMUM = 3    # normal readings needed before anything is substituted
+SMOOTHING_MAX_RUN = 5    # substituted readings in a row (about five seconds)
+
 
 class PulsarsPublisher:
     def __init__(self, user_id, send, *, include_skin_temp=False):
@@ -22,6 +34,11 @@ class PulsarsPublisher:
         self.boot = None
         self.clock_origin = None
         self.fitness_origin = None
+        self.forget_readings()
+
+    def forget_readings(self):
+        self.normal = {vital: deque(maxlen=SMOOTHING_WINDOW) for vital, *_ in VITALS}
+        self.substituted = {vital: 0 for vital, *_ in VITALS}
 
     def offer(self, record):
         packet = record["message"]
@@ -39,6 +56,7 @@ class PulsarsPublisher:
                 self.clock_origin = received_at - uptime
                 self.boot = boot
                 self.fitness_origin = None
+                self.forget_readings()
             if boot != self.boot:
                 return
             if is_fitness:
@@ -65,10 +83,27 @@ class PulsarsPublisher:
             if vital == "bt" and not self.include_skin_temp:
                 continue
             value = packet["values"][field]
+            normal = self.normal[vital]
             if (packet["quality"][quality] == "ok" and type(value) in (int, float)
                     and math.isfinite(value) and minimum <= value <= maximum):
-                self.send(f"pulsars/{self.user_id}/vitals/{vital}",
-                          json.dumps({"value": value, "recordedAt": recorded_at}, separators=(",", ":")))
+                normal.append(value)
+                self.substituted[vital] = 0
+            elif len(normal) >= SMOOTHING_MINIMUM and self.substituted[vital] < SMOOTHING_MAX_RUN:
+                if self.substituted[vital] == 0:
+                    why = packet["quality"][quality] if packet["quality"][quality] != "ok" else "out of range"
+                    print(f"Pulsars {vital}: reading not usable ({why}); "
+                          f"sending the mean of the last {len(normal)} normal readings", flush=True)
+                value = round(statistics.fmean(normal), 2)
+                self.substituted[vital] += 1
+            else:
+                if len(normal) >= SMOOTHING_MINIMUM and self.substituted[vital] == SMOOTHING_MAX_RUN:
+                    print(f"Pulsars {vital}: no normal reading for {SMOOTHING_MAX_RUN} s; "
+                          "nothing is sent until one returns", flush=True)
+                    self.substituted[vital] += 1  # say it once
+                continue
+            self.send(f"pulsars/{self.user_id}/vitals/{vital}",
+                      json.dumps({"value": value, "recordedAt": recorded_at}, separators=(",", ":")))
+
 
 
 @contextmanager

@@ -1,7 +1,7 @@
 import { prisma } from '../../db.js';
 import { HttpError } from '../../middleware/errors.js';
 import { requireUser } from '../users/service.js';
-import type { CreateCheckupBody, ListCheckupsQuery, SubmitAnswersBody } from './schemas.js';
+import type { ListCheckupsQuery, NewCheckup, SubmitAnswersBody } from './schemas.js';
 
 const people = { select: { id: true, name: true } } as const;
 
@@ -15,7 +15,7 @@ const detail = {
 // transaction. The response is read after it commits: a read that includes several relations
 // loads them concurrently, and inside an interactive transaction (a single connection) that
 // makes node-postgres emit a deprecation warning.
-export async function createCheckup({ questions, ...input }: CreateCheckupBody) {
+export async function createCheckup({ questions, ...input }: NewCheckup) {
     await requireUser(input.userId, 'patient');
     await requireUser(input.medicId, 'medic');
     const id = await prisma.$transaction(async (tx) => {
@@ -27,10 +27,11 @@ export async function createCheckup({ questions, ...input }: CreateCheckupBody) 
 }
 
 // For a patient: check-ups assigned to them. For a medic: check-ups they assigned.
-export async function listCheckups(userId: number, { status, limit, offset }: ListCheckupsQuery) {
+// `onlyByMedic` narrows a patient's list to one medic's check-ups (a medic looking at a patient).
+export async function listCheckups(userId: number, { status, limit, offset }: ListCheckupsQuery, onlyByMedic?: number) {
     const user = await requireUser(userId);
     const rows = await prisma.checkup.findMany({
-        where: { ...(user.role === 'medic' ? { medicId: userId } : { userId }), status },
+        where: { ...(user.role === 'medic' ? { medicId: userId } : { userId, medicId: onlyByMedic }), status },
         orderBy: [{ assignedAt: 'desc' }, { id: 'desc' }],
         take: limit,
         skip: offset,

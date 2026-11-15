@@ -6,35 +6,40 @@ import type { CreateUserBody, ListQuery, UpdateUserBody } from './schemas.js';
 
 const BCRYPT_ROUNDS = 10;
 
-// Every read goes through this so the hash can never leak into a response.
-const omitHash = { passwordHash: true } as const;
+// Every read goes through this so the hash and the session counter can never leak into a response.
+export const omitSecrets = { passwordHash: true, tokenVersion: true } as const;
 
 export function createUser(input: CreateUserBody) {
     const { password, ...rest } = input;
     return bcrypt
         .hash(password, BCRYPT_ROUNDS)
-        .then((passwordHash) => prisma.user.create({ data: { ...rest, passwordHash }, omit: omitHash }));
+        .then((passwordHash) => prisma.user.create({ data: { ...rest, passwordHash }, omit: omitSecrets }));
 }
 
-export function listUsers({ role, limit, offset }: ListQuery) {
+/**
+ * `visibleTo` narrows the list to what that user may see: themselves, and for a medic also the
+ * patients they have assigned a check-up to.
+ */
+export function listUsers({ role, limit, offset }: ListQuery, visibleTo: { id: number; role: Role }) {
+    const visible: Prisma.UserWhereInput =
+        visibleTo.role === 'medic'
+            ? { OR: [{ id: visibleTo.id }, { patientCheckups: { some: { medicId: visibleTo.id } } }] }
+            : { id: visibleTo.id };
     return prisma.user.findMany({
-        where: { role },
+        where: { role, ...visible },
         orderBy: { id: 'asc' },
         take: limit,
         skip: offset,
-        omit: omitHash,
+        omit: omitSecrets,
     });
 }
 
 export function getUser(id: number) {
-    return prisma.user.findUniqueOrThrow({ where: { id }, omit: omitHash });
+    return prisma.user.findUniqueOrThrow({ where: { id }, omit: omitSecrets });
 }
 
-export async function updateUser(id: number, input: UpdateUserBody) {
-    const { password, ...rest } = input;
-    const data: Prisma.UserUpdateInput = { ...rest };
-    if (password !== undefined) data.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    return prisma.user.update({ where: { id }, data, omit: omitHash });
+export function updateUser(id: number, input: UpdateUserBody) {
+    return prisma.user.update({ where: { id }, data: input, omit: omitSecrets });
 }
 
 export async function deleteUser(id: number) {
@@ -54,7 +59,7 @@ export async function deleteUser(id: number) {
  * their role, e.g. `requireUser(medicId, 'medic')`. Throws 404 if missing, 400 on wrong role.
  */
 export async function requireUser(id: number, role?: Role) {
-    const user = await prisma.user.findUnique({ where: { id }, omit: omitHash });
+    const user = await prisma.user.findUnique({ where: { id }, omit: omitSecrets });
     if (!user) throw new HttpError(404, `User ${id} not found`);
     if (role && user.role !== role) throw new HttpError(400, `User ${id} is not a ${role}`);
     return user;

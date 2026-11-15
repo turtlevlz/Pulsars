@@ -1,4 +1,4 @@
-import { request, USER_ID } from "./client";
+import { request, requestForUser } from "./client";
 
 export type ThreadMessage = {
   id: number;
@@ -28,10 +28,9 @@ export function getThread(id: number, signal?: AbortSignal) {
 
 /** The patient's most recent follow-up thread, or null if they have none. */
 export async function getLatestThread(signal?: AbortSignal): Promise<ThreadSummary | null> {
-  const threads = await request<ThreadSummary[]>(
-    `/users/${USER_ID}/threads?limit=1`,
-    { signal },
-  );
+  const threads = await requestForUser<ThreadSummary[]>("/threads?limit=1", {
+    signal,
+  });
   return threads[0] ?? null;
 }
 

@@ -9,7 +9,7 @@ Features in scope:
 3. **Symptom log**: patients record symptoms that sensors can't measure.
 4. **AI assistant**: asks follow-up questions based on a logged symptom.
 
-Deferred for now: authentication and authorization, plus live push to the dashboard. The design leaves room for both (see [Later phases](#later-phases)).
+Authentication and authorization are implemented (see [Auth](#auth-as-built)). The medic dashboard has its read-side endpoints and on-demand threshold alerts (see [Medic dashboard](#medic-dashboard-as-built)). Still deferred: live push to the dashboard, alert notifications, and device security (see [Later phases](#later-phases)).
 
 ---
 
@@ -136,7 +136,7 @@ A symptom can have **multiple follow-up threads** (decided). For example, a pati
 | POST | `/threads/:id/messages` | `{ answer }` → `{ nextQuestion \| null, done }` |
 | GET | `/users/:id/threads?from=&to=` | All of a patient's threads across symptoms, for the medic view |
 
-**Medic access (decided: medics can see threads):** a medic sees threads read-only, using the last endpoint above and `GET /threads/:id`. Medics see a patient's threads next to that patient's check-ups and vitals. Only the patient can post answers. Until auth exists, that rule is just a role check in the service. Once auth is added, it's enforced by middleware (see Later phases).
+**Medic access (decided: medics can see threads):** a medic sees threads read-only, using the last endpoint above and `GET /threads/:id`. Medics see a patient's threads next to that patient's check-ups and vitals. Only the patient can post answers; the route guards enforce that (see [Auth](#auth-as-built)).
 
 **LLM integration (`src/llm/client.ts`):**
 
@@ -179,9 +179,10 @@ A symptom can have **multiple follow-up threads** (decided). For example, a pati
 
 ## Later phases
 
-- **Auth:** JWT or session login. Middleware attaches `req.user`, then role guards make sure patients only see their own data, and medics only see data (vitals, check-ups, follow-up threads) for patients they've assigned a check-up to. Only patients can post follow-up answers. Services already take a user ID, so this mostly means adding middleware.
+- ~~**Auth**~~ — done, see [Auth](#auth-as-built).
 - **Live dashboard:** when `ingest()` stores a reading, it emits an event. A WebSocket or SSE endpoint forwards new readings to dashboard clients.
-- **Alerts:** threshold rules on incoming vitals (e.g. SpO₂ < 90) that notify the assigned medic.
+- ~~**Alerts (display)**~~ — done on demand, see [Medic dashboard](#medic-dashboard-as-built).
+- **Alert notifications:** push or e-mail a medic when a new episode starts (alerts are only listed today), and per-patient or per-medic limits.
 - **Device security:** per-device MQTT credentials and topic ACLs.
 
 ---
@@ -202,7 +203,7 @@ A symptom can have **multiple follow-up threads** (decided). For example, a pati
 All eight build-order steps are implemented and covered by tests (`npm test`). Where the build differs from, or decides beyond, the text above:
 
 - **Ports:** Postgres is published on host port **5433** (a native Postgres already used 5432). `docker-compose.yml` and `.env.example` reflect this.
-- **IDs and login:** primary keys are `Int` autoincrement. The ERD has no login field on `users`; one (e.g. unique email) must be added together with auth.
+- **IDs and login:** primary keys are `Int` autoincrement. Users log in with a unique, lower-cased `email` (added with auth).
 - **Symptom logging response:** `POST /users/:id/symptoms` also returns `threadId` (the follow-up thread opened for it). The opening question is generated in the background; poll `GET /threads/:id`.
 - **Check-ups:** `GET /users/:id/checkups` returns the patient's check-ups for a patient and the assigned ones for a medic, with `questionCount`/`answeredCount`. Answers can be saved partially and changed until the check-up completes; a completed check-up returns 409. A submission is all-or-nothing.
 - **Vitals:** `GET /users/:id/vitals` requires `type`; a reading whose `(user, recordedAt)` already exists is a duplicate and is skipped even if the value differs. Plausible ranges: hr 20-250, bt 30-45, bo 50-100.
@@ -215,5 +216,61 @@ All eight build-order steps are implemented and covered by tests (`npm test`). W
   - If the model is unreachable or returns unusable output (one retry), a generic fallback question is used, so thread progression never depends on the model being up.
   - Earlier threads reach the model as a condensed Q/A transcript (last two threads, each message clipped), not an LLM-generated summary.
   - Only the model ever sees a patient's free text, and its output is only used as question text or, after filtering, as tips in the closing note.
-- **Not enforced until auth exists:** that only patients answer follow-ups or check-ups, that medics only see their own patients, and that a client can only act on its own user id. Today the API trusts the ids in the URL and body.
 - **Real model:** the assistant has been run end to end against MedGemma 1.5 4B through Ollama (`LLM_URL=http://localhost:11434/v1`, `LLM_MODEL=medgemma1.5`); questions were model-written and fast once loaded (about 0.3-0.6 s warm, about 47 s to load the model cold). Tune the prompts in `src/modules/assistant/prompt.ts`.
+
+### Auth (as built)
+
+**Login.** `POST /auth/register` (public sign-up, always a *patient*; a `role` field is a 400), `POST /auth/login`, `GET /auth/me`, `POST /auth/password`. Register and login return `{ token, user }`. Everything else needs `Authorization: Bearer <token>`; only `/health` and the first two auth routes are public. `src/app.ts` mounts `authenticate` after them.
+
+**Tokens.** HS256 JWTs signed with `JWT_SECRET` (at least 32 characters, required; `JWT_TTL_HOURS`, default 12). The algorithm is pinned and the issuer checked, so `alg: none` and other algorithms are refused. The token carries only `sub` (user id) and `tv` (the user's `token_version`). `authenticate` loads the user on every request, so the **role always comes from the database**, a deleted account stops working at once, and changing the password (`POST /auth/password`, which needs the current password) bumps `token_version`, which signs out every other device. There are no refresh tokens: when a token expires, the user signs in again. The client treats any 401 as "sign in again".
+
+**Passwords and sign-in.** bcrypt, 8 to 72 *bytes* (longer is refused, not truncated). A wrong password and an unknown email give the same 401 and take about the same time. Five failed attempts per email and IP lock that pair out for 15 minutes (429 with `Retry-After`); the counter is in memory, so it is per process and resets on restart. Password change shares that limiter, and answers a wrong current password with 403 (not 401, so a client doesn't mistake it for an expired session).
+
+**Who can do what** (`src/modules/auth/access.ts`, one place):
+
+| | Patient | Medic |
+|---|---|---|
+| Vitals, check-ups, follow-up threads (read) | their own | patients they have assigned a check-up to |
+| Symptom log (read) | their own | patients they have assigned a check-up to (read-only; added for the medic dashboard) |
+| Fitness (`GET /users/:id/fitness/calendar\|day\|routines`) | their own | patients they have assigned a check-up to |
+| Complete a routine (`PUT /users/:id/fitness/routines/:key/completion`) | their own | never |
+| Alerts, vitals trend (`GET /users/:id/alerts`, `/vitals/trend`) | trend: their own; alerts: no | patients they have assigned a check-up to |
+| Acknowledge an alert (`POST /users/:id/alerts/acknowledge`) | no | patients they have assigned a check-up to |
+| `GET /patients/search`, `GET /patients/overview` | no | yes (search: any patient's id and name; overview: their own patients only) |
+| Post vitals / symptoms, edit or delete symptoms, answer threads, open threads, answer check-ups | their own | never |
+| Assign a check-up (`POST /checkups`) | no | yes, as themselves (`medicId` may be omitted; another medic's id is a 403) |
+| Create an account with a role (`POST /users`) | no | yes |
+| Profile read / edit / delete | their own | their own, plus read of patients they have a check-up with |
+| `GET /users` | themselves | themselves and their patients |
+
+A check-up is visible to its patient and to the medic who assigned it only. When a medic looks at a patient's check-ups they see just the ones they assigned, not other medics'.
+
+`/users/:id/...` routes answer 403 whether or not that user exists. Single-record routes (`/symptoms/:id`, `/threads/:id`, `/checkups/:id`) answer 404 for a missing record and 403 for somebody else's.
+
+**Known limits, on purpose:**
+- Access for a medic is derived from a check-up row, and any medic can create one for any patient. There is no consent step, no patient-medic assignment and no admin role. Tightening it means a patient-medic link that a patient or admin approves.
+- `POST /users` lets any medic create other medics; there is no admin.
+- Public registration is unthrottled and reveals whether an email exists (409).
+- Bearer tokens in the SPA live in `sessionStorage` (gone when the tab closes, readable by any script on the page, so keep the dashboard free of third-party scripts). Logging out only discards the token on the client; changing the password is the way to revoke one.
+- The MQTT broker is still anonymous and the subscriber trusts the user id in the topic (device security phase). Keep the broker on loopback until then.
+- Migrated databases: `20261115074500_auth` gave existing users generated emails (`user<id>@pulsars.local`), with `medic@`, `alice@` and `bob@pulsars.local` for the seed names, and left their passwords unchanged.
+
+### Medic dashboard (as built)
+
+The frontend's medic home page (`/`, role `medic`) is built on these read-side endpoints. All need a medic who has a check-up for the patient (`assertCanViewPatient`) unless noted.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/users/:id/vitals/trend?type=&from=&to=&points=` | Time-bucketed `{t, avg, min, max}` points for a chart. Default last 24 h, at most 31 days, `points` 2-240 (default 60). The bucket is `max(60 s, range / points)` rounded up to whole minutes and aligned with `date_bin`, so a chart doesn't shift between refreshes. Patients can read their own. |
+| GET | `/users/:id/alerts?from=&to=&status=open\|all` | Alert episodes, newest first, with `acknowledgedAt`/`acknowledgedBy`. Default last 7 days, at most 31. Medic only. |
+| POST | `/users/:id/alerts/acknowledge` | `{type, startedAt}`. 404 `No such alert` unless that episode exists. Idempotent; the first acknowledgement is kept. Medic only. |
+| GET | `/patients/overview` | The medic's own patients: id, name, age, `lastReadingAt`, `openAlerts`. |
+| GET | `/patients/search?q=` | Patients by name or id (min. 2 characters, 20 results, `%`/`_`/`\` stripped), id and name only, so a medic can find someone to assign a first check-up to. |
+
+**Alerts are computed, not stored.** `modules/vitals/thresholds.ts` holds fixed default limits (heart rate above 100 bpm, body temperature above 37.8 °C, blood oxygen below 92 %). `modules/alerts/episodes.ts` averages readings into one-minute buckets (`modules/vitals/buckets.ts`), treats a bucket as a breach when its *average* is past the limit, and reports runs of at least **2 consecutive breaching minutes**; a minute with no readings ends a run. An episode is identified by `(patient, type, startedAt)`. The only stored state is `alert_acknowledgements` (migration `20261115103000_alert_acknowledgements`), unique on that triple, so changing the rule never leaves stale alert rows behind; an acknowledgement whose episode no longer computes is just ignored. "Open" means not acknowledged.
+
+**Things to remember when reading an alert:** readings come from a wearable (skin temperature is not core temperature and SpO₂ is experimental on this hardware), the limits are not per-patient, and an alert is a prompt to look at the data, not a diagnosis. The dashboard's summary card is rule-based text built in the frontend from the same numbers (no model involved).
+
+**Decided on purpose:** assigned medics may now **read** a patient's symptom log (`GET /users/:id/symptoms`, `GET /symptoms/:id`); writes stay patient-only. Any medic can still assign a check-up to any patient, which is also how they start following one (see Known limits above).
+
+**Not built yet** (shown as placeholders or omitted in the UI): messaging between medic and patient, sending treatment instructions, per-patient thresholds, a mission/"since start" range, and a signal-delay indicator.

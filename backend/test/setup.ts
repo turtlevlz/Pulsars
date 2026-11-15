@@ -2,6 +2,7 @@ import { afterAll, beforeEach, vi } from 'vitest';
 import { prisma } from '../src/db.js';
 import { setLlmClient } from '../src/llm/client.js';
 import { waitForBackgroundWork } from '../src/modules/assistant/service.js';
+import { resetThrottle } from '../src/modules/auth/throttle.js';
 
 const TABLES = [
     'followup_messages', 'followup_threads', 'questions', 'checkups', 'symptoms',
@@ -15,6 +16,8 @@ beforeEach(async () => {
     const [{ db }] = await prisma.$queryRaw<{ db: string }[]>`SELECT current_database() AS db`;
     if (!db.endsWith('_test')) throw new Error(`Refusing to truncate "${db}": not a test database`);
     await prisma.$executeRawUnsafe(`TRUNCATE ${TABLES.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
+
+    resetThrottle();
 
     // Default model for every test: a canned question. Tests that care install their own.
     setLlmClient({ chat: async () => JSON.stringify({ question: 'Default question?', done: false }) });

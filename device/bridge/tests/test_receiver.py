@@ -135,6 +135,81 @@ class ReceiverTests(unittest.TestCase):
         self.assertEqual(topic, "pulsars/7/vitals/bt")
         self.assertEqual(json.loads(payload), {"value": 32.5, "recordedAt": "2026-11-14T12:00:01.000+00:00"})
 
+    def _smoothing_bridge(self, include_skin_temp=True):
+        from pulsars_mqtt import PulsarsPublisher
+        publish = Mock()
+        bridge = PulsarsPublisher(7, publish, include_skin_temp=include_skin_temp)
+        hello = {"type": "hello", "source": "device", "device_id": "cuff", "boot_id": "boot", "device_time_ms": 0}
+        bridge.offer({"message": hello, "received_at_utc": "2026-11-14T12:00:00+00:00"})
+
+        def reading(second, pulse, quality="ok", spo2=97, spo2_quality="ok"):
+            packet = {**hello, "type": "reading", "state": "recording", "device_time_ms": second * 1000,
+                      "values": {"pulse_bpm": pulse, "spo2_pct": spo2, "skin_temp_c": 33.0},
+                      "quality": {"pulse": quality, "spo2": spo2_quality, "skin_temp": "ok"}}
+            publish.reset_mock()
+            bridge.offer({"message": packet, "received_at_utc": "2026-11-14T12:10:00+00:00"})
+            return {call.args[0].rsplit("/", 1)[1]: json.loads(call.args[1]) for call in publish.call_args_list}
+
+        return bridge, reading
+
+    def test_unusable_readings_are_replaced_by_the_mean_of_recent_normal_ones(self):
+        _, reading = self._smoothing_bridge()
+        for second, pulse in enumerate([70, 72, 74, 76], start=1):
+            self.assertEqual(reading(second, pulse)["hr"]["value"], pulse)
+        sent = reading(5, None, quality="motion")  # mean of 70, 72, 74, 76
+        self.assertEqual(sent["hr"], {"value": 73, "recordedAt": "2026-11-14T12:00:05.000+00:00"})
+        self.assertEqual(sent["bo"]["value"], 97)  # the other metrics are untouched
+        self.assertEqual(reading(6, None, quality="no_contact")["hr"]["value"], 73)
+        self.assertEqual(reading(7, 80)["hr"]["value"], 80)  # a normal reading is sent as it is
+
+    def test_implausible_values_the_device_calls_ok_are_smoothed_too(self):
+        _, reading = self._smoothing_bridge()
+        for second in range(1, 5):
+            reading(second, 70, spo2=96)
+        sent = reading(5, 70, spo2=45)  # outside 50-100
+        self.assertEqual(sent["bo"]["value"], 96)
+        self.assertEqual(sent["hr"]["value"], 70)
+
+    def test_smoothed_readings_do_not_feed_the_mean(self):
+        _, reading = self._smoothing_bridge()
+        for second, pulse in enumerate([60, 60, 60, 90], start=1):
+            reading(second, pulse)
+        first = reading(5, None, quality="motion")["hr"]["value"]
+        second = reading(6, None, quality="motion")["hr"]["value"]
+        self.assertEqual(first, second)  # still the mean of the four normal readings
+
+    def test_a_long_outage_is_left_as_a_gap(self):
+        _, reading = self._smoothing_bridge()
+        for second in range(1, 5):
+            reading(second, 70)
+        for second in range(5, 10):  # five substituted readings
+            self.assertEqual(reading(second, None, quality="no_contact")["hr"]["value"], 70)
+        self.assertNotIn("hr", reading(10, None, quality="no_contact"))
+        self.assertNotIn("hr", reading(11, None, quality="no_contact"))
+        self.assertEqual(reading(12, 71)["hr"]["value"], 71)  # recovers, and the count starts over
+        self.assertEqual(reading(13, None, quality="motion")["hr"]["value"], 70.2)
+
+    def test_nothing_is_invented_without_enough_normal_readings(self):
+        _, reading = self._smoothing_bridge()
+        reading(1, 70)
+        reading(2, 71)  # two normal readings are not enough
+        self.assertNotIn("hr", reading(3, None, quality="motion"))
+
+    def test_a_new_boot_starts_with_no_history(self):
+        bridge, reading = self._smoothing_bridge()
+        for second in range(1, 5):
+            reading(second, 70)
+        hello = {"type": "hello", "source": "device", "device_id": "cuff", "boot_id": "boot-two", "device_time_ms": 0}
+        bridge.offer({"message": hello, "received_at_utc": "2026-11-14T12:20:00+00:00"})
+        self.assertEqual(len(bridge.normal["hr"]), 0)
+        packet = {**hello, "type": "reading", "state": "recording", "device_time_ms": 1000,
+                  "values": {"pulse_bpm": None, "spo2_pct": 97, "skin_temp_c": 33.0},
+                  "quality": {"pulse": "motion", "spo2": "ok", "skin_temp": "ok"}}
+        bridge.send.reset_mock()
+        bridge.offer({"message": packet, "received_at_utc": "2026-11-14T12:20:01+00:00"})
+        topics = [call.args[0].rsplit("/", 1)[1] for call in bridge.send.call_args_list]
+        self.assertNotIn("hr", topics)  # nothing from the previous boot is carried over
+
     def test_duplicate_records_are_logged_once(self):
         packets = example()
         for packet in packets:

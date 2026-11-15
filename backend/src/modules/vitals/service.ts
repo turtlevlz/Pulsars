@@ -1,7 +1,10 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../db.js';
+import { HttpError } from '../../middleware/errors.js';
 import { requireUser } from '../users/service.js';
-import type { Reading, SeriesQuery, SummaryQuery } from './schemas.js';
+import { getBuckets } from './buckets.js';
+import type { Reading, SeriesQuery, SummaryQuery, TrendQuery } from './schemas.js';
+import { THRESHOLDS } from './thresholds.js';
 import { VITALS, VITAL_TYPES, type VitalType } from './types.js';
 
 const ident = (name: string) => Prisma.raw(`"${name}"`);
@@ -91,4 +94,33 @@ export async function getSummary(userId: number, { from, to }: SummaryQuery) {
         }),
     );
     return Object.fromEntries(entries);
+}
+
+const DAY_MS = 24 * 3600_000;
+const MAX_TREND_RANGE_MS = 31 * DAY_MS;
+
+/**
+ * A readable trend over any range: bucketed averages (see buckets.ts) plus the vital's
+ * reference limit. The bucket length is chosen so about `points` buckets cover the range, and
+ * is never shorter than a minute. Defaults to the last 24 hours.
+ */
+export async function getTrend(userId: number, { type, from, to, points }: TrendQuery) {
+    await requireUser(userId);
+    const end = to ?? new Date();
+    const start = from ?? new Date(end.getTime() - DAY_MS);
+    if (end.getTime() - start.getTime() > MAX_TREND_RANGE_MS) {
+        throw new HttpError(400, 'The range can be at most 31 days');
+    }
+    const bucketSeconds = Math.max(60, Math.ceil((end.getTime() - start.getTime()) / 1000 / points / 60) * 60);
+    // `to` is inclusive for the other endpoints, so include the final instant here as well.
+    const buckets = await getBuckets(userId, type, start, new Date(end.getTime() + 1), bucketSeconds);
+    return {
+        type,
+        unit: VITALS[type].unit,
+        from: start,
+        to: end,
+        bucketSeconds,
+        threshold: THRESHOLDS[type],
+        points: buckets.map(({ t, avg, min, max }) => ({ t, avg, min, max })),
+    };
 }

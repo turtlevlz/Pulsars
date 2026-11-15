@@ -1,6 +1,6 @@
 import type { Checkup } from "../components/Checkups";
 import type { CheckupAnswers } from "../lib/questionnaire";
-import { request, USER_ID } from "./client";
+import { request, requestForUser } from "./client";
 
 type CheckupStatus = "assigned" | "completed";
 
@@ -24,9 +24,7 @@ export type CheckupDetail = Omit<CheckupSummary, "questionCount" | "answeredCoun
 };
 
 export function listCheckups(signal?: AbortSignal) {
-  return request<CheckupSummary[]>(`/users/${USER_ID}/checkups?limit=100`, {
-    signal,
-  });
+  return requestForUser<CheckupSummary[]>("/checkups?limit=100", { signal });
 }
 
 export function getCheckup(id: string) {
