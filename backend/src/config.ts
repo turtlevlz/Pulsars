@@ -4,9 +4,10 @@ import { z } from 'zod';
 const schema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
+    PULSARS_HOST: z.string().min(1).optional(),
     DATABASE_URL: z.string().min(1),
 
-    // MQTT vitals ingestion. Leave MQTT_URL unset to run the API without the subscriber.
+    // MQTT device ingestion. Leave MQTT_URL unset to run the API without the subscriber.
     MQTT_URL: z.string().min(1).optional(),
     // Stable id + persistent session: the broker queues QoS 1 messages while the backend is
     // down. Two backend instances need different ids or they will kick each other off.

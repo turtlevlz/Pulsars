@@ -6,6 +6,7 @@ import { checkupsRouter } from './modules/checkups/routes.js';
 import { symptomsRouter } from './modules/symptoms/routes.js';
 import { vitalsRouter } from './modules/vitals/routes.js';
 import { usersRouter } from './modules/users/routes.js';
+import { fitnessRouter } from './modules/fitness/routes.js';
 
 export const app = express();
 
@@ -21,6 +22,7 @@ app.use('/users', usersRouter);
 app.use(symptomsRouter);
 app.use(checkupsRouter);
 app.use(vitalsRouter);
+app.use(fitnessRouter);
 app.use(assistantRouter);
 
 app.use(notFoundHandler);

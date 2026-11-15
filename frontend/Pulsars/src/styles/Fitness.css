@@ -1,0 +1,289 @@
+.fitness {
+  --fitness-light: #a6b2f9;
+  --fitness-moderate: #8176f0;
+  --fitness-high: #be74e5;
+  --fitness-quiet: #6a6e94;
+}
+
+.fitness-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.fitness-status,
+.fitness-muted {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.fitness-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fitness-status > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fitness-light);
+}
+
+.fitness-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.fitness-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 22px;
+}
+
+.fitness-calendar__nav,
+.fitness-calendar__month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fitness-calendar__nav {
+  margin: 18px 0 12px;
+}
+
+.fitness-calendar__month > span {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.fitness-calendar__nav button,
+.fitness-date {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fitness-calendar__month button {
+  width: 32px;
+  height: 32px;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.fitness-calendar__nav .fitness-calendar__today {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+
+.fitness-calendar__nav button:hover,
+.fitness-date:hover {
+  border-color: var(--fitness-light);
+}
+
+.fitness button:focus-visible,
+.fitness-event summary:focus-visible,
+.fitness-checklist input:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+.fitness-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.fitness-calendar__weekday {
+  color: var(--text-soft);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.fitness-date {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 6px;
+  font-size: 0.86rem;
+}
+
+.fitness-date[aria-current="date"] {
+  border-color: var(--fitness-moderate);
+}
+
+.fitness-date[aria-pressed="true"] {
+  background: #403b7a;
+  border-color: var(--fitness-light);
+}
+
+.fitness-date__duration {
+  color: #d1d2ed;
+  font-size: 0.76rem;
+}
+
+.fitness-date__bands {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  margin-top: auto;
+  height: 3px;
+}
+
+.fitness-band {
+  min-width: 3px;
+  border-radius: 999px;
+}
+
+.fitness-band--light { background-color: var(--fitness-light); }
+.fitness-band--moderate { background-color: var(--fitness-moderate); }
+.fitness-band--high { background-color: var(--fitness-high); }
+.fitness-band--quiet { background-color: var(--fitness-quiet); flex-grow: 1; }
+
+.fitness-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.fitness-calendar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 14px 0 0;
+  padding: 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  list-style: none;
+}
+
+.fitness-calendar__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fitness-summary p,
+.fitness-timeline > p { margin: 10px 0 0; }
+
+.fitness-timeline__list {
+  display: grid;
+  gap: 7px;
+  max-height: 28rem;
+  overflow-y: auto;
+  margin: 12px 0 0;
+  padding: 0 5px 0 0;
+  list-style: none;
+  scrollbar-color: var(--surface-muted) transparent;
+}
+
+.fitness-event {
+  background: var(--surface);
+  border-radius: var(--radius-inner);
+  font-size: 0.86rem;
+}
+
+.fitness-event__summary,
+.fitness-event--routine,
+.fitness-event--gap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+}
+
+.fitness-event__summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--radius-inner);
+}
+
+.fitness-event__summary::-webkit-details-marker { display: none; }
+.fitness-event__summary::after {
+  content: "⌄";
+  color: var(--text-soft);
+  font-size: 1rem;
+}
+.fitness-event[open] .fitness-event__summary::after { transform: rotate(180deg); }
+
+.fitness-event__marker {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.fitness-event--routine .fitness-event__marker {
+  width: auto;
+  height: auto;
+  color: var(--fitness-light);
+}
+.fitness-event--gap .fitness-event__marker { border: 1px dashed var(--text-soft); }
+.fitness-event--gap { color: var(--text-soft); }
+.fitness-event__name { flex: 1; min-width: 0; }
+.fitness-event__duration { white-space: nowrap; }
+.fitness-event small { display: block; color: var(--text-soft); }
+
+.fitness-event__detail {
+  margin: 0 12px;
+  padding: 8px 0 12px;
+  border-top: 1px solid var(--surface-muted);
+}
+
+.fitness-event__detail .fitness-calendar__legend { margin: 0 0 10px; }
+.fitness-event__sensors { margin: 0; }
+.fitness-event__sensors dt { color: var(--text-soft); }
+.fitness-event__sensors dd { margin: 0 0 5px; }
+.fitness-event__sensors dd:last-child { margin-bottom: 0; }
+
+.fitness-checklist {
+  display: grid;
+  gap: 10px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.fitness-checklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  cursor: pointer;
+  border-radius: var(--radius-inner);
+  padding: 10px;
+  background: var(--surface);
+}
+
+.fitness-checklist input {
+  margin: 4px 0 0;
+  accent-color: var(--accent);
+}
+
+.fitness-checklist__submit:disabled { opacity: 0.55; cursor: default; }
+
+@media (max-width: 900px) {
+  .fitness-layout { grid-template-columns: minmax(0, 1fr); }
+  .fitness-timeline__list { max-height: none; }
+}
+
+@media (max-width: 460px) {
+  .fitness-calendar { padding-inline: 12px; }
+  .fitness-calendar__grid { gap: 4px; }
+  .fitness-calendar__weekday { font-size: 0.69rem; }
+  .fitness-date { min-height: 52px; padding: 4px; }
+  .fitness-date__duration { font-size: 0.68rem; }
+}

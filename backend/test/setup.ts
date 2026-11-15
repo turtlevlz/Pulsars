@@ -5,7 +5,7 @@ import { waitForBackgroundWork } from '../src/modules/assistant/service.js';
 
 const TABLES = [
     'followup_messages', 'followup_threads', 'questions', 'checkups', 'symptoms',
-    'heart_rates', 'body_temps', 'blood_oxygens', 'users',
+    'heart_rates', 'body_temps', 'blood_oxygens', 'fitness_windows', 'routine_completions', 'users',
 ];
 
 beforeEach(async () => {

@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { testDatabaseUrl } from './test-db.js';
 
@@ -19,7 +20,8 @@ export default async function setup() {
         await admin.end();
     }
 
-    execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
+    const prismaCli = fileURLToPath(new URL('../node_modules/prisma/build/index.js', import.meta.url));
+    execFileSync(process.execPath, [prismaCli, 'migrate', 'deploy'], {
         env: { ...process.env, DATABASE_URL: url.toString() }, // dotenv never overrides an existing value
         stdio: 'pipe',
     });

@@ -60,8 +60,37 @@ model User {
   symptoms        Symptom[]
   patientCheckups Checkup[]     @relation("PatientCheckups")
   medicCheckups   Checkup[]     @relation("MedicCheckups")
+  fitnessWindows  FitnessWindow[]
+  routineCompletions RoutineCompletion[]
 
   @@map("users")
+}
+
+model FitnessWindow {
+  userId       Int      @map("user_id")
+  deviceId     String   @map("device_id") @db.VarChar(64)
+  bootId       String   @map("boot_id") @db.VarChar(64)
+  deviceTimeMs BigInt   @map("device_time_ms")
+  recordedAt   DateTime @map("recorded_at") @db.Timestamptz(3)
+  bands        Int[]    @db.SmallInt
+  context      Json
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, deviceId, bootId, deviceTimeMs])
+  @@index([userId, recordedAt])
+  @@map("fitness_windows")
+}
+
+model RoutineCompletion {
+  userId      Int      @map("user_id")
+  routineKey  String   @map("routine_key") @db.VarChar(32)
+  localDate   String   @map("local_date") @db.VarChar(10)
+  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, routineKey, localDate])
+  @@index([userId, completedAt])
+  @@map("routine_completions")
 }
 
 model HeartRate {

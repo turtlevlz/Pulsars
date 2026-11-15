@@ -30,6 +30,11 @@ export default function Navbar() {
               Checkups
             </NavLink>
           </li>
+          <li>
+            <NavLink to="/fitness" className={linkClass}>
+              Fitness
+            </NavLink>
+          </li>
         </ul>
       </nav>
     </header>

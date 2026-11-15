@@ -4,12 +4,12 @@ import { prisma } from './db.js';
 import { startSubscriber, type Subscriber } from './mqtt/subscriber.js';
 import { waitForBackgroundWork } from './modules/assistant/service.js';
 
-const server = app.listen(config.PORT, () => {
-    console.log(`Server running at http://localhost:${config.PORT}`);
+const server = app.listen({ port: config.PORT, host: config.PULSARS_HOST }, () => {
+    console.log(`Server running at http://${config.PULSARS_HOST ?? 'localhost'}:${config.PORT}`);
 });
 
 const subscriber: Subscriber | null = config.MQTT_URL ? startSubscriber(config.MQTT_URL) : null;
-if (!subscriber) console.log('[mqtt] MQTT_URL not set: vitals subscriber disabled');
+if (!subscriber) console.log('[mqtt] MQTT_URL not set: device subscriber disabled');
 
 async function shutdown() {
     server.close();
