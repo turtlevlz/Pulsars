@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { MOTION_LEVELS, type TimedReading, type TimelineEvent } from "../api/fitness";
 import { formatDuration, formatTime, levelLabels } from "../lib/fitness";
 
@@ -34,18 +34,22 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
     return (
       <div className="fitness-event fitness-event--gap">
         <span className="fitness-event__marker" aria-hidden="true" />
-        <div><strong>Motion data unavailable</strong><small>{range}</small></div>
+        <span>{range} · No motion data</span>
       </div>
     );
   }
   const active = event.kind === "activity";
+  const gapSeconds = event.kind === "quiet" ? event.gapSeconds : 0;
   const title = active ? `${levelLabels[event.band]} motion` : "No sustained motion";
   const marker = active ? `fitness-band--${event.band}` : "fitness-band--quiet";
   return (
     <details className="fitness-event">
       <summary className="fitness-event__summary">
         <span className={`fitness-event__marker ${marker}`} aria-hidden="true" />
-        <span className="fitness-event__name"><strong>{title}</strong><small>{range}</small></span>
+        <span className="fitness-event__name">
+          <strong>{title}</strong>
+          <small>{range}{gapSeconds > 0 && ` · ${formatDuration(gapSeconds)} without motion data`}</small>
+        </span>
         {active && <span className="fitness-event__duration">{formatDuration(event.activeSeconds)}</span>}
       </summary>
       <div className="fitness-event__detail">
@@ -67,11 +71,16 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
   );
 }
 
-export default function FitnessTimeline({ timeline, loading }: { timeline: TimelineEvent[]; loading: boolean }) {
+export default function FitnessTimeline({
+  timeline, loading, status,
+}: { timeline: TimelineEvent[]; loading: boolean; status?: ReactNode }) {
   const heading = useId();
   return (
     <section className="card fitness-timeline" aria-labelledby={heading}>
-      <h2 id={heading} className="card__title card__title--lg">Activity Timeline</h2>
+      <div className="fitness-timeline__header">
+        <h2 id={heading} className="card__title card__title--lg">Activity Timeline</h2>
+        {status}
+      </div>
       {timeline.length ? (
         <ol className="fitness-timeline__list">
           {timeline.map(event => (

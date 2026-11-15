@@ -5,7 +5,7 @@
   --fitness-quiet: #6a6e94;
 }
 
-.fitness-header {
+.fitness-timeline__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -233,7 +233,12 @@
   color: var(--fitness-light);
 }
 .fitness-event--gap .fitness-event__marker { border: 1px dashed var(--text-soft); }
-.fitness-event--gap { color: var(--text-soft); }
+.fitness-event--gap {
+  background: transparent;
+  color: var(--text-soft);
+  padding-block: 3px;
+  font-size: 0.78rem;
+}
 .fitness-event__name { flex: 1; min-width: 0; }
 .fitness-event__duration { white-space: nowrap; }
 .fitness-event small { display: block; color: var(--text-soft); }
@@ -256,6 +261,14 @@
   border: 0;
   margin: 0;
   padding: 0;
+  list-style: none;
+}
+
+.fitness-checklist label,
+.fitness-checklist li {
+  border-radius: var(--radius-inner);
+  padding: 10px;
+  background: var(--surface);
 }
 
 .fitness-checklist label {
@@ -263,9 +276,6 @@
   align-items: flex-start;
   gap: 11px;
   cursor: pointer;
-  border-radius: var(--radius-inner);
-  padding: 10px;
-  background: var(--surface);
 }
 
 .fitness-checklist input {

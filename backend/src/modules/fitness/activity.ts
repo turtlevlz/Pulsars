@@ -2,13 +2,14 @@ import type { FitnessWindow } from './schemas.js';
 
 const bands = ['light', 'moderate', 'high'] as const;
 const second = 1000;
+const maxQuietGapMs = 30 * second;
 export const contextRadiusMs = 30 * second;
 
 export type Intensity = Record<(typeof bands)[number], number>;
 type ContextSlot = [pulseBpm: number | null, skinTempC: number | null] | null;
 export type ObservedWindow = { recordedAt: Date; bands: number[]; context: ContextSlot[] };
 type EventKind = 'activity' | 'quiet' | 'gap';
-type Segment = { kind: EventKind; start: number; end: number; intensity: Intensity };
+type Segment = { kind: EventKind; start: number; end: number; intensity: Intensity; gapMs: number };
 type Reading = { at: number; value: number };
 
 export const emptyIntensity = (): Intensity => ({ light: 0, moderate: 0, high: 0 });
@@ -69,8 +70,18 @@ export function analyzeDay(windows: ObservedWindow[], from: Date, to: Date) {
 
     function append(kind: EventKind, fromMs: number, toMs: number, band?: keyof Intensity) {
         let segment = segments.at(-1);
+        if (kind === 'quiet' && segment?.kind === 'gap' && segment.end === fromMs) {
+            const previous = segments.at(-2);
+            const gapMs = segment.end - segment.start;
+            if (previous?.kind === 'quiet' && previous.end === segment.start && gapMs <= maxQuietGapMs) {
+                previous.end = toMs;
+                previous.gapMs += gapMs;
+                segments.pop();
+                return;
+            }
+        }
         if (!segment || segment.kind !== kind || segment.end !== fromMs) {
-            segment = { kind, start: fromMs, end: toMs, intensity: emptyIntensity() };
+            segment = { kind, start: fromMs, end: toMs, intensity: emptyIntensity(), gapMs: 0 };
             segments.push(segment);
         } else {
             segment.end = toMs;
@@ -109,7 +120,9 @@ export function analyzeDay(windows: ObservedWindow[], from: Date, to: Date) {
                 pulse: metricFor(segment, pulses),
                 skinTemperature: metricFor(segment, temperatures),
             };
-            if (segment.kind === 'quiet') return { ...event, ...context, kind: segment.kind };
+            if (segment.kind === 'quiet') {
+                return { ...event, ...context, kind: segment.kind, gapSeconds: segment.gapMs / second };
+            }
             const { intensity } = segment;
             const band = intensity.high ? 'high' : intensity.moderate ? 'moderate' : 'light';
             return { ...event, ...context, kind: segment.kind, band, activeSeconds: activeSeconds(intensity), intensity };

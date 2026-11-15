@@ -2,6 +2,8 @@
 
 The Fitness tab tracks forearm movement while the XIAO ESP32C3 cuff is connected to the laptop over USB. The month calendar shows tracked days and intensity. Select a date to see time by motion level and open a timeline entry to see available pulse and forearm skin temperature. The Routines checklist records a completion for the local day.
 
+Quiet entries group interruptions of up to 30 seconds and show the combined time without motion data. The routine checklists include timed phases, repetitions and rests. [NHS sitting exercises](https://www.nhs.uk/live-well/exercise/sitting-exercises/) · [NHS strength exercises](https://www.nhs.uk/live-well/exercise/strength-exercises/) · [CDC physical activity intensity](https://www.cdc.gov/physical-activity-basics/measuring/index.html)
+
 ## Run the dashboard
 
 Use Node.js 24, Python 3.10 or later, and the local PostgreSQL and MQTT services. Start these commands from the checkout. On a laptop with Docker or Podman and Compose, use the backend's Compose file to start PostgreSQL and Mosquitto.

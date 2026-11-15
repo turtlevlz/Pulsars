@@ -17,7 +17,7 @@ type Readings = { pulse: TimedReading | null; skinTemperature: TimedReading | nu
 
 export type TimelineEvent =
   | (Interval & Readings & { kind: "activity"; band: MotionLevel; activeSeconds: number; intensity: Intensity })
-  | (Interval & Readings & { kind: "quiet" })
+  | (Interval & Readings & { kind: "quiet"; gapSeconds: number })
   | (Interval & { kind: "gap" })
   | { kind: "routine"; routineKey: string; title: string; completedAt: string };
 

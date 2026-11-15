@@ -21,6 +21,11 @@ export default function Navbar() {
             </NavLink>
           </li>
           <li>
+            <NavLink to="/fitness" className={linkClass}>
+              Fitness
+            </NavLink>
+          </li>
+          <li>
             <NavLink to="/symptom-log" className={linkClass}>
               Symptom Log
             </NavLink>
@@ -28,11 +33,6 @@ export default function Navbar() {
           <li>
             <NavLink to="/checkups" className={linkClass}>
               Checkups
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="/fitness" className={linkClass}>
-              Fitness
             </NavLink>
           </li>
         </ul>

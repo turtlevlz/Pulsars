@@ -22,6 +22,7 @@ export type Checkup = {
 type CheckupsProps = {
   checkups: Checkup[];
   onStart?: (id: string) => void;
+  onViewCompleted?: (id: string) => void;
   /** Card heading. Defaults to "Checkups". */
   title?: string;
   /** Shown when the list is empty. */
@@ -40,6 +41,7 @@ function ClockIcon() {
 export default function Checkups({
   checkups,
   onStart,
+  onViewCompleted,
   title = "Checkups",
   emptyMessage = "Nothing here yet.",
 }: CheckupsProps) {
@@ -75,7 +77,7 @@ export default function Checkups({
                 </span>
               </div>
 
-              {item.completed ? (
+              {item.completed && !onViewCompleted ? (
                 <button type="button" className="btn btn--muted" disabled>
                   Completed
                 </button>
@@ -83,9 +85,10 @@ export default function Checkups({
                 <button
                   type="button"
                   className="btn btn--primary"
-                  onClick={() => onStart?.(item.id)}
+                  aria-label={item.completed ? `View ${item.title}` : undefined}
+                  onClick={() => (item.completed ? onViewCompleted : onStart)?.(item.id)}
                 >
-                  Start
+                  {item.completed ? "View" : "Start"}
                 </button>
               )}
             </li>

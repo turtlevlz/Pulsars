@@ -88,6 +88,38 @@ describe('Fitness', () => {
         ]);
     });
 
+    it('groups quiet windows across gaps of up to 30 seconds and keeps longer gaps separate', async () => {
+        const user = await makePatient();
+        const still = Array.from({ length: 10 }, () => sample());
+        const stillWithPulse = [...still];
+        stillWithPulse[0] = sample(0, 0, 69, 32);
+        for (const [at, samples, uptime] of [
+            ['2026-10-08T01:00:00Z', still, 1000],
+            ['2026-10-08T01:00:20Z', stillWithPulse, 21000],
+            ['2026-10-08T01:01:00Z', still, 61000],
+            ['2026-10-08T01:01:41Z', still, 102000],
+        ] as const) {
+            expect(await publish(user.id, packet(at, samples, uptime))).toBe('stored');
+        }
+
+        const result = await request(app).get(path(user.id, 'day'))
+            .query({ date: '2026-10-08', timeZone: 'UTC' }).expect(200);
+        expect(result.body).toMatchObject({
+            activeSeconds: 0,
+            trackedSeconds: 40,
+            timeline: [
+                {
+                    kind: 'quiet', startedAt: '2026-10-08T01:00:00.000Z', endedAt: '2026-10-08T01:01:10.000Z',
+                    gapSeconds: 40,
+                    pulse: { value: 69, recordedAt: '2026-10-08T01:00:20.000Z', relation: 'during' },
+                    skinTemperature: { value: 32, recordedAt: '2026-10-08T01:00:20.000Z', relation: 'during' },
+                },
+                { kind: 'gap', startedAt: '2026-10-08T01:01:10.000Z', endedAt: '2026-10-08T01:01:41.000Z' },
+                { kind: 'quiet', startedAt: '2026-10-08T01:01:41.000Z', endedAt: '2026-10-08T01:01:51.000Z', gapSeconds: 0 },
+            ],
+        });
+    });
+
     it('rejects malformed windows and restricts ingestion to real patient IDs', async () => {
         const [patient, medic] = await Promise.all([makePatient(), makeMedic()]);
         const data = packet('2026-10-15T00:00:00Z', Array.from({ length: 10 }, () => sample()));
@@ -129,6 +161,15 @@ describe('Fitness', () => {
         const routines = await request(app).get(path(user.id, 'routines')).query({ timeZone }).expect(200);
         expect(routines.body.routines.map((routine: { key: string }) => routine.key)).toEqual([
             'mobility', 'light-cardio', 'steady-cardio', 'resistance',
+        ]);
+        expect(routines.body.routines).toMatchObject([
+            { key: 'mobility', steps: expect.arrayContaining([expect.stringMatching(/15 seconds/)]) },
+            { key: 'light-cardio', steps: expect.arrayContaining([expect.stringMatching(/6 minutes/)]) },
+            { key: 'steady-cardio', steps: expect.arrayContaining([expect.stringMatching(/9 minutes/)]) },
+            {
+                key: 'resistance',
+                steps: expect.arrayContaining([expect.stringMatching(/2 sets of 8.*30 seconds/)]),
+            },
         ]);
         const endpoint = path(user.id, 'routines/mobility/completion');
         const first = await request(app).put(endpoint).send({ timeZone }).expect(200);

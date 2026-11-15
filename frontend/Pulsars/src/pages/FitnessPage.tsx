@@ -7,7 +7,6 @@ import {
 import Checkups from "../components/Checkups";
 import FitnessCalendar from "../components/FitnessCalendar";
 import FitnessTimeline from "../components/FitnessTimeline";
-import PageHeader from "../components/PageHeader";
 import RoutineModal from "../components/RoutineModal";
 import { civilDate, dateKey, formatDuration, formatTime, levelLabels } from "../lib/fitness";
 import "../styles/Pulsars.css";
@@ -128,6 +127,18 @@ export default function FitnessPage() {
   const age = lastSeen ? now.getTime() - new Date(lastSeen).getTime() : Infinity;
   const live = age >= -pollMs && age < 25_000;
   const problem = dayError ?? calendarError ?? routineError;
+  const status = followingToday && currentDay && (
+    <p className="fitness-status" role="status">
+      {live ? <><span aria-hidden="true" /> Receiving cuff data</> : lastSeen
+        ? <>Last device data <time dateTime={lastSeen}>
+          {dateKey(new Date(lastSeen)) === today ? formatTime(lastSeen) : new Date(lastSeen).toLocaleString()}
+        </time></> : "Waiting for USB cuff data"}
+    </p>
+  );
+
+  function openRoutine(key: string) {
+    setActiveRoutine(routines.find(routine => routine.key === key) ?? null);
+  }
 
   async function complete(key: string) {
     await finishRoutine(key, timeZone);
@@ -136,18 +147,7 @@ export default function FitnessPage() {
   }
 
   return (
-    <main className="pulsars fitness">
-      <div className="fitness-header">
-        <PageHeader title="Fitness" />
-        {followingToday && currentDay && (
-          <p className="fitness-status" role="status">
-            {live ? <><span aria-hidden="true" /> Receiving cuff data</> : lastSeen
-              ? <>Last device data <time dateTime={lastSeen}>
-                {dateKey(new Date(lastSeen)) === today ? formatTime(lastSeen) : new Date(lastSeen).toLocaleString()}
-              </time></> : "Waiting for USB cuff data"}
-          </p>
-        )}
-      </div>
+    <main className="pulsars fitness" aria-label="Fitness">
       {problem && <p role="alert" className="notice">{problem}</p>}
       <div className="fitness-layout">
         <div className="fitness-column">
@@ -158,11 +158,12 @@ export default function FitnessPage() {
         <div className="fitness-column">
           <Checkups title="Routines" emptyMessage={routineError ? "Could not load routines." : "Loading routines…"}
             checkups={routines.map(routine => ({
-              id: routine.key, title: routine.title, dueLabel: routine.category, duration: routine.duration,
+              id: routine.key, title: routine.title, dueLabel: routine.completedAt ? "Completed" : routine.category,
+              duration: routine.duration,
               completed: !!routine.completedAt,
             }))}
-            onStart={key => setActiveRoutine(routines.find(routine => routine.key === key) ?? null)} />
-          <FitnessTimeline timeline={currentDay?.timeline ?? []} loading={!currentDay && !dayError} />
+            onStart={openRoutine} onViewCompleted={openRoutine} />
+          <FitnessTimeline timeline={currentDay?.timeline ?? []} loading={!currentDay && !dayError} status={status} />
         </div>
       </div>
       {activeRoutine && (
