@@ -7,10 +7,45 @@ Rules:
 - Never diagnose, never name likely conditions, never recommend medication or treatment.
 - Never repeat a question that was already asked (in this conversation or in earlier threads).
 - The vitals are context only. Do not interpret them or comment on them.
-- If the patient describes something that could be an emergency (for example chest pain, trouble breathing, fainting, signs of a stroke, severe bleeding, thoughts of self-harm), put a brief message in "question" telling them to contact emergency services or their medic right away, and set "done" to true.
+- If the patient describes something that could be an emergency (for example chest pain, trouble breathing, fainting, signs of a stroke, severe bleeding, thoughts of self-harm), put a brief message in "question" telling them to contact their medic right away, and set "done" to true.
 - When you have enough information, set "done" to true and "question" to null.
 
 Respond with ONLY a JSON object, nothing else: {"question": string or null, "done": boolean}`;
+
+// The last message of a thread: a few very general self-care tips. Only the tips come from
+// the model. The framing, the "contact your medic" line and a filter that drops anything
+// about medicine or causes are applied in code (see safety.ts).
+export const CLOSING_PROMPT = `You are writing the last message of a symptom chat inside a health-monitoring app. A patient logged a symptom and answered some follow-up questions. Suggest 2 to 4 very general self-care tips that might make them more comfortable until their care team reviews this.
+
+Rules:
+- Only everyday, non-medical suggestions, for example: resting, drinking water, regular meals, a quiet or dark room, gentle movement or stretching, easing off an activity that makes it worse, writing down when it happens and what seems to trigger it.
+- Fit the tips to what the patient actually told you. Leave out anything that does not apply to their answers.
+- Never diagnose. Never name a likely condition or cause.
+- Never mention medicines, drugs, doses, supplements, herbal remedies, creams, procedures or any other treatment.
+- Never say the symptom is harmless or nothing to worry about.
+- The vitals are context only. Do not interpret them or comment on them.
+- Each tip is one short plain-language sentence, written to the patient ("you").
+
+Respond with ONLY a JSON object, nothing else: {"tips": ["...", "..."]}`;
+
+const tipsSchema = z.object({ tips: z.array(z.string()) });
+
+/** The tips from a closing reply, or null if the reply can't be read. Safety filtering happens later. */
+export function parseClosingTips(raw: string): string[] | null {
+    const text = raw.replace(/```(?:json)?/gi, '');
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end <= start) return null;
+
+    let json: unknown;
+    try {
+        json = JSON.parse(text.slice(start, end + 1));
+    } catch {
+        return null;
+    }
+    const parsed = tipsSchema.safeParse(json);
+    return parsed.success ? parsed.data.tips : null;
+}
 
 // Used when the model is unreachable or keeps returning something unusable, so a thread
 // still progresses. Generic on purpose: they make sense for any symptom.
@@ -135,4 +170,16 @@ export function buildMessages(ctx: PromptContext): ChatMessage[] {
         );
     }
     return messages;
+}
+
+/** One request for the closing tips: the symptom, then the whole conversation as plain text. */
+export function buildClosingMessages(ctx: PromptContext): ChatMessage[] {
+    const conversation = ctx.transcript.map((m) => `${m.role === 'assistant' ? 'Q' : 'A'}: ${clip(m.content, 500)}`);
+    return [
+        { role: 'system', content: CLOSING_PROMPT },
+        {
+            role: 'user',
+            content: `${buildContextText(ctx)}\n\nThe follow-up conversation:\n${conversation.join('\n')}\n\nWrite the tips.`,
+        },
+    ];
 }

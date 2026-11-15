@@ -1,16 +1,28 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { errorMessage } from "../api/client";
+import type { Frequency } from "../api/symptoms";
 
 export type SymptomEntry = {
   symptom: string;
   severity: number;
+  frequency: Frequency;
   notes: string;
 };
 
 type SymptomLogProps = {
-  onSave?: (entry: SymptomEntry) => void;
+  /** May be async. If it throws, the message is shown and the form keeps its values. */
+  onSave?: (entry: SymptomEntry) => void | Promise<void>;
   symptoms?: string[];
 };
+
+const FREQUENCY_OPTIONS: { value: Frequency; label: string }[] = [
+  { value: "once", label: "Just this once" },
+  { value: "daily", label: "Daily" },
+  { value: "several_daily", label: "Several times a day" },
+  { value: "weekly", label: "Weekly" },
+  { value: "constant", label: "Constantly" },
+];
 
 const DEFAULT_SYMPTOMS = [
   "Headache",
@@ -31,12 +43,25 @@ export default function SymptomLog({
 }: SymptomLogProps) {
   const [symptom, setSymptom] = useState(symptoms[0]);
   const [severity, setSeverity] = useState(2);
+  const [frequency, setFrequency] = useState<Frequency>("once");
   const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    onSave?.({ symptom, severity, notes: notes.trim() });
-    setNotes("");
+    if (saving) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave?.({ symptom, severity, frequency, notes: notes.trim() });
+      setNotes("");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -81,6 +106,21 @@ export default function SymptomLog({
         </div>
 
         <label className="field">
+          <span className="field__label">How often does it happen?</span>
+          <select
+            className="field__control field__control--select"
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value as Frequency)}
+          >
+            {FREQUENCY_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
           <span className="field__label">Notes (optional)</span>
           <textarea
             className="field__control field__control--textarea"
@@ -91,8 +131,18 @@ export default function SymptomLog({
           />
         </label>
 
-        <button type="submit" className="btn btn--primary btn--wide">
-          Save to symptom log
+        {error && (
+          <p role="alert" className="form-error">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="btn btn--primary btn--wide"
+          disabled={saving}
+        >
+          {saving ? "Saving..." : "Save to symptom log"}
         </button>
       </form>
     </section>

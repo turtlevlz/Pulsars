@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+    CLOSING_PROMPT,
     FALLBACK_QUESTIONS,
     SYSTEM_PROMPT,
+    buildClosingMessages,
     buildContextText,
     buildMessages,
     fallbackQuestion,
     parseAssistantReply,
+    parseClosingTips,
     type PromptContext,
 } from '../src/modules/assistant/prompt.js';
 
@@ -118,6 +121,46 @@ describe('buildMessages', () => {
     it('the system prompt forbids diagnosing and covers emergencies', () => {
         expect(SYSTEM_PROMPT).toMatch(/never diagnose/i);
         expect(SYSTEM_PROMPT).toMatch(/emergenc/i);
+        expect(SYSTEM_PROMPT).toMatch(/contact their medic/i);
         expect(SYSTEM_PROMPT).toMatch(/JSON/);
+    });
+});
+
+describe('parseClosingTips', () => {
+    it.each([
+        ['plain JSON', '{"tips":["Rest.","Drink water."]}', ['Rest.', 'Drink water.']],
+        ['markdown fence', '```json\n{"tips":["Rest."]}\n```', ['Rest.']],
+        ['chatter around it', 'Here you go: {"tips":["Rest."]} Take care!', ['Rest.']],
+        ['no tips at all', '{"tips":[]}', []],
+    ])('reads %s', (_label, raw, expected) => {
+        expect(parseClosingTips(raw)).toEqual(expected);
+    });
+
+    it.each([['not JSON'], ['{"tips":"rest"}'], ['{"advice":["Rest."]}'], ['{"tips":[1,2]}'], ['{broken']])('rejects %s', (raw) => {
+        expect(parseClosingTips(raw)).toBeNull();
+    });
+});
+
+describe('buildClosingMessages', () => {
+    const messages = buildClosingMessages({
+        ...base,
+        transcript: [
+            { role: 'assistant', content: 'Since when?' },
+            { role: 'patient', content: 'Monday' },
+        ],
+    });
+
+    it('sends the symptom and the whole conversation as one request', () => {
+        expect(messages.map((m) => m.role)).toEqual(['system', 'user']);
+        expect(messages[0].content).toBe(CLOSING_PROMPT);
+        expect(messages[1].content).toContain('Name: Headache');
+        expect(messages[1].content).toContain('Q: Since when?\nA: Monday');
+    });
+
+    it('the closing prompt allows only non-medical tips and asks for JSON', () => {
+        expect(CLOSING_PROMPT).toMatch(/non-medical/i);
+        expect(CLOSING_PROMPT).toMatch(/never diagnose/i);
+        expect(CLOSING_PROMPT).toMatch(/never mention medicines/i);
+        expect(CLOSING_PROMPT).toMatch(/"tips"/);
     });
 });

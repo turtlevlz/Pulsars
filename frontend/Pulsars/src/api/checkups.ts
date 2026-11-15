@@ -1,147 +1,114 @@
 import type { Checkup } from "../components/Checkups";
+import type { CheckupAnswers } from "../lib/questionnaire";
+import { request, USER_ID } from "./client";
 
-// Placeholder data shared by the dashboard and the checkups page.
-// Replace with API later.
-export const INITIAL_CHECKUPS: Checkup[] = [
-  {
-    id: "sleep",
-    title: "Sleep quality questionnaire",
-    dueLabel: "Due Today",
-    duration: "About 5 min",
-    completed: false,
-    dueToday: true,
-    instructions: [
-      "Find a quiet place and sit comfortably.",
-      "Think about last night, from when you went to bed until you woke up.",
-      "Answer honestly. There are no right or wrong answers.",
-      "You can go back to change an answer before you finish.",
-    ],
-    questions: [
-      {
-        id: "hours",
-        type: "number",
-        prompt: "How many hours did you sleep last night?",
-        unit: "hours",
-        min: 0,
-        max: 24,
-      },
-      {
-        id: "quality",
-        type: "scale",
-        prompt: "How would you rate your sleep quality?",
-        min: 1,
-        max: 5,
-        minLabel: "Very poor",
-        maxLabel: "Excellent",
-      },
-      {
-        id: "wakeups",
-        type: "choice",
-        prompt: "How many times did you wake up during the night?",
-        options: ["Not at all", "1 or 2 times", "3 or more times"],
-      },
-      {
-        id: "rested",
-        type: "choice",
-        prompt: "Do you feel rested this morning?",
-        options: ["Yes", "Somewhat", "No"],
-      },
-      {
-        id: "notes",
-        type: "text",
-        prompt: "Is there anything else you want to note about your sleep?",
-        placeholder: "Optional",
-        required: false,
-      },
-    ],
-  },
-  {
-    id: "bp",
-    title: "Blood pressure check",
-    dueLabel: "Due Today",
-    duration: "About 3 min",
-    completed: true,
-    instructions: [
-      "Sit down and rest quietly for 5 minutes.",
-      "Keep your feet flat and your back supported.",
-      "Place the cuff on your bare upper arm, level with your heart.",
-      "Stay still and do not talk while the reading is taken.",
-    ],
-    questions: [
-      {
-        id: "systolic",
-        type: "number",
-        prompt: "What is the top number (systolic)?",
-        unit: "mmHg",
-        min: 50,
-        max: 250,
-      },
-      {
-        id: "diastolic",
-        type: "number",
-        prompt: "What is the bottom number (diastolic)?",
-        unit: "mmHg",
-        min: 30,
-        max: 150,
-      },
-      {
-        id: "position",
-        type: "choice",
-        prompt: "What position were you in?",
-        options: ["Sitting", "Standing", "Lying down"],
-      },
-    ],
-  },
-  {
-    id: "sugar",
-    title: "Blood sugar check",
-    dueLabel: "Due 11/11",
-    duration: "About 3 min",
-    completed: true,
-    instructions: [
-      "Wash and dry your hands.",
-      "Prepare your meter and a new test strip.",
-      "Use the side of your fingertip for the sample.",
-      "Wait for the reading to appear on the meter.",
-    ],
-    questions: [
-      {
-        id: "glucose",
-        type: "number",
-        prompt: "What does the meter show?",
-        unit: "mg/dL",
-        min: 20,
-        max: 600,
-      },
-      {
-        id: "timing",
-        type: "choice",
-        prompt: "When did you take this reading?",
-        options: ["Fasting", "Before a meal", "After a meal", "Bedtime"],
-      },
-    ],
-  },
-  {
-    id: "weight",
-    title: "Weight check",
-    dueLabel: "Due 11/10",
-    duration: "About 3 min",
-    completed: true,
-    past: true,
-    instructions: [
-      "Place the scale on a flat, hard floor.",
-      "Weigh yourself without shoes and in light clothing.",
-      "Try to weigh yourself at the same time of day each time.",
-    ],
-    questions: [
-      {
-        id: "weight",
-        type: "number",
-        prompt: "What does the scale show?",
-        unit: "kg",
-        min: 20,
-        max: 400,
-      },
-    ],
-  },
-];
+type CheckupStatus = "assigned" | "completed";
+
+/** One row of GET /users/:id/checkups (no questions, just counts). */
+export type CheckupSummary = {
+  id: number;
+  name: string;
+  description: string | null;
+  status: CheckupStatus;
+  /** ISO timestamp, or null when the medic set no due date. */
+  dueAt: string | null;
+  assignedAt: string;
+  completedAt: string | null;
+  questionCount: number;
+  answeredCount: number;
+};
+
+/** GET /checkups/:id, including the questions. */
+export type CheckupDetail = Omit<CheckupSummary, "questionCount" | "answeredCount"> & {
+  questions: { id: number; question: string; answer: string | null }[];
+};
+
+export function listCheckups(signal?: AbortSignal) {
+  return request<CheckupSummary[]>(`/users/${USER_ID}/checkups?limit=100`, {
+    signal,
+  });
+}
+
+export function getCheckup(id: string) {
+  return request<CheckupDetail>(`/checkups/${id}`);
+}
+
+/** Saves one answer per question; the backend marks the check-up completed once all are in. */
+export function submitAnswers(id: string, answers: CheckupAnswers) {
+  return request<CheckupDetail>(`/checkups/${id}/answers`, {
+    method: "PUT",
+    body: {
+      answers: Object.entries(answers).map(([questionId, answer]) => ({
+        questionId: Number(questionId),
+        answer: String(answer),
+      })),
+    },
+  });
+}
+
+// ---------------------------------------------------------------- backend -> UI shape
+
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+function dueFields(dueAt: string | null, completed: boolean) {
+  if (!dueAt) return { dueLabel: "No due date", dueToday: false, past: false };
+
+  const due = new Date(dueAt);
+  const now = new Date();
+  const today = sameDay(due, now);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  return {
+    dueLabel: today ? "Due Today" : `Due ${due.getMonth() + 1}/${due.getDate()}`,
+    dueToday: today && !completed,
+    // Older completed items are dimmed
+    past: completed && due < startOfToday,
+  };
+}
+
+/**
+ * The backend stores a question as free text and an answer as a string, so every
+ * question becomes a text question here. (The UI also supports scale, choice and number
+ * questions, but the backend has nowhere to keep their type or options yet.)
+ */
+export function toCheckup(c: CheckupSummary | CheckupDetail): Checkup {
+  const completed = c.status === "completed";
+  const count = "questions" in c ? c.questions.length : c.questionCount;
+
+  return {
+    id: String(c.id),
+    title: c.name,
+    ...dueFields(c.dueAt, completed),
+    duration: `${count} ${count === 1 ? "question" : "questions"}`,
+    completed,
+    // The description is free text; a line per step on the "Before you start" screen
+    instructions: c.description
+      ?.split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
+    questions:
+      "questions" in c
+        ? c.questions.map((q) => ({
+            id: String(q.id),
+            type: "text" as const,
+            prompt: q.question,
+            placeholder: "Type your answer",
+          }))
+        : undefined,
+  };
+}
+
+/** To do first (soonest due first, undated last), then completed (most recent first). */
+export function sortCheckups(rows: CheckupSummary[]): CheckupSummary[] {
+  const key = (c: CheckupSummary): [number, number] =>
+    c.status === "completed"
+      ? [1, -Date.parse(c.completedAt ?? c.assignedAt)]
+      : [0, c.dueAt ? Date.parse(c.dueAt) : Infinity];
+
+  return [...rows].sort((a, b) => {
+    const [ra, ta] = key(a);
+    const [rb, tb] = key(b);
+    if (ra !== rb) return ra - rb;
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+}

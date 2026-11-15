@@ -9,6 +9,8 @@ export type SymptomRecord = {
 
 type SymptomHistoryProps = {
   records: SymptomRecord[];
+  /** Shown when the list is empty, e.g. while loading. */
+  emptyMessage?: string;
 };
 
 const LEVELS = [1, 2, 3, 4, 5];
@@ -22,7 +24,10 @@ function formatDate(iso: string) {
   });
 }
 
-export default function SymptomHistory({ records }: SymptomHistoryProps) {
+export default function SymptomHistory({
+  records,
+  emptyMessage = "No symptoms logged yet.",
+}: SymptomHistoryProps) {
   return (
     <section className="card history" aria-labelledby="history-title">
       <h2 id="history-title" className="card__title card__title--lg">
@@ -30,7 +35,7 @@ export default function SymptomHistory({ records }: SymptomHistoryProps) {
       </h2>
 
       {records.length === 0 ? (
-        <p className="history__empty">No symptoms logged yet.</p>
+        <p className="history__empty">{emptyMessage}</p>
       ) : (
         <ul className="history__list">
           {records.map((record) => (

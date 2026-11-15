@@ -122,7 +122,8 @@ A symptom can have **multiple follow-up threads** (decided). For example, a pati
 1. When a patient logs a symptom, the backend opens the first thread automatically. It asks the LLM for an opening question and stores it in `followup_messages` as an `assistant` message.
 2. The patient answers through `POST /threads/:id/messages`, which stores the reply as a `patient` message.
 3. The backend sends the thread to the LLM, stores the next question and returns it.
-4. The thread is marked `done` after N questions (say 3–5), or earlier if the model returns a "done" signal. Messages can't be added to a `done` thread.
+4. The thread is marked `done` after N questions (say 3–5), or earlier if the model returns a "done" signal. Messages can't be added to a `done` thread. A thread that ends this way finishes with a **closing note**: a few very general, non-medical self-care tips written by the model from the patient's answers, wrapped in fixed text (not medical advice; contact your medic if it gets worse). Tips about medicine, doses or likely causes are filtered out in code.
+   - **Emergencies** are recognised in code (patterns for chest pain, trouble breathing, stroke signs, fainting, severe bleeding, self-harm, ...) in the symptom text and in every answer. The patient is told to contact their medic right away, the thread closes and no tips are given.
 5. Later, the patient can open a new thread on the same symptom with `POST /symptoms/:id/threads`. The new thread's prompt includes short summaries of the earlier threads, so the model can ask what has changed instead of repeating questions.
 
 **Endpoints:**
@@ -209,9 +210,10 @@ All eight build-order steps are implemented and covered by tests (`npm test`). W
 - **Assistant:**
   - One open thread per symptom (a second `POST /symptoms/:id/threads` returns 409 with the open thread's id).
   - The thread closes after `ASSISTANT_MAX_QUESTIONS` (default 4) questions or when the model says it is done.
-  - `{nextQuestion, done: true}` with a non-null question is a final message that expects no answer, used for the emergency notice.
+  - `{nextQuestion, done: true}` with a non-null question is a final message that expects no answer: the emergency notice or the closing note.
+  - Emergency detection and the tip filter are deterministic (`safety.ts`) because a small local model proved unreliable at both: in a real-model test (MedGemma 1.5 4B) it kept asking intake questions about chest pressure with a numb left arm.
   - If the model is unreachable or returns unusable output (one retry), a generic fallback question is used, so thread progression never depends on the model being up.
   - Earlier threads reach the model as a condensed Q/A transcript (last two threads, each message clipped), not an LLM-generated summary.
-  - Only the model ever sees a patient's free text, and its output is only used as question text.
+  - Only the model ever sees a patient's free text, and its output is only used as question text or, after filtering, as tips in the closing note.
 - **Not enforced until auth exists:** that only patients answer follow-ups or check-ups, that medics only see their own patients, and that a client can only act on its own user id. Today the API trusts the ids in the URL and body.
-- **Not verified against a real model:** no local model runtime was available while building, so the assistant was exercised against a scripted model and a fake OpenAI-compatible HTTP server. Try a real model (e.g. Ollama) and tune the prompt in `src/modules/assistant/prompt.ts`.
+- **Real model:** the assistant has been run end to end against MedGemma 1.5 4B through Ollama (`LLM_URL=http://localhost:11434/v1`, `LLM_MODEL=medgemma1.5`); questions were model-written and fast once loaded (about 0.3-0.6 s warm, about 47 s to load the model cold). Tune the prompts in `src/modules/assistant/prompt.ts`.

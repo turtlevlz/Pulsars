@@ -11,11 +11,24 @@ export type ChatMessage = {
 type HealthAssistantProps = {
   messages: ChatMessage[];
   onSend: (text: string) => void;
+  /** Waiting for the assistant to write its next message. */
+  busy?: boolean;
+  /** Turns the input off, e.g. when there is no question to answer. */
+  disabled?: boolean;
+  placeholder?: string;
+  /** Shown instead of the conversation while there are no messages. */
+  emptyText?: string;
+  error?: string | null;
 };
 
 export default function HealthAssistant({
   messages,
   onSend,
+  busy = false,
+  disabled = false,
+  placeholder = "Ask about your data...",
+  emptyText,
+  error,
 }: HealthAssistantProps) {
   const [draft, setDraft] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
@@ -29,7 +42,7 @@ export default function HealthAssistant({
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || disabled) return;
     onSend(text);
     setDraft("");
   };
@@ -45,8 +58,8 @@ export default function HealthAssistant({
             <span className="pill pill--sm">AI</span>
           </div>
           <p className="assistant__disclaimer">
-            Explains your data and asks questions. It does not give medical
-            advice.
+            Asks follow-up questions about the symptoms you log. It does not
+            give medical advice.
           </p>
         </div>
 
@@ -59,6 +72,9 @@ export default function HealthAssistant({
         aria-live="polite"
         aria-label="Conversation with the health assistant"
       >
+        {messages.length === 0 && !busy && emptyText && (
+          <p className="assistant__empty">{emptyText}</p>
+        )}
         {messages.map((message) => (
           <p
             key={message.id}
@@ -67,6 +83,14 @@ export default function HealthAssistant({
             {message.text}
           </p>
         ))}
+        {busy && (
+          <p className="bubble bubble--assistant bubble--typing">Thinking...</p>
+        )}
+        {error && (
+          <p role="alert" className="form-error">
+            {error}
+          </p>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -74,14 +98,15 @@ export default function HealthAssistant({
         <input
           type="text"
           className="assistant__input"
-          placeholder="Ask about your data..."
-          aria-label="Ask about your data"
+          placeholder={placeholder}
+          aria-label={placeholder}
           value={draft}
+          disabled={disabled}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={() => setInputFocused(true)}
           onBlur={() => setInputFocused(false)}
         />
-        <button type="submit" className="btn btn--primary">
+        <button type="submit" className="btn btn--primary" disabled={disabled}>
           Send
         </button>
       </form>

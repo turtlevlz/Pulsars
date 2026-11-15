@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 src/generated
+CLAUDE.md
+.claude
+skills-lock.json
+schema.jpeg

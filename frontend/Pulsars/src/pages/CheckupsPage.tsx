@@ -5,8 +5,15 @@ import { useCheckups } from "../hooks/useCheckups";
 import "../styles/Pulsars.css";
 
 export default function CheckupsPage() {
-  const { checkups, activeCheckup, startCheckup, closeCheckup, completeCheckup } =
-    useCheckups();
+  const {
+    checkups,
+    loading,
+    error,
+    activeCheckup,
+    startCheckup,
+    closeCheckup,
+    completeCheckup,
+  } = useCheckups();
 
   const todo = checkups.filter((c) => !c.completed);
   const done = checkups.filter((c) => c.completed);
@@ -21,6 +28,12 @@ export default function CheckupsPage() {
         subtitle="Keep up with your routine health checks."
       />
 
+      {error && (
+        <p role="alert" className="notice">
+          {error}
+        </p>
+      )}
+
       <section className="card summary" aria-label="Checkup progress">
         <div className="summary__row">
           <p className="summary__count">
@@ -29,7 +42,11 @@ export default function CheckupsPage() {
           <p className="summary__next">
             {todo.length > 0
               ? `Next up: ${todo[0].title}`
-              : "You are all caught up."}
+              : loading
+                ? "Loading..."
+                : checkups.length > 0
+                  ? "You are all caught up."
+                  : "No checkups assigned yet."}
           </p>
         </div>
         <div
@@ -49,12 +66,14 @@ export default function CheckupsPage() {
           title="To do"
           checkups={todo}
           onStart={startCheckup}
-          emptyMessage="Nothing left to do. Nice work."
+          emptyMessage={
+            loading ? "Loading..." : "Nothing left to do. Nice work."
+          }
         />
         <Checkups
           title="Completed"
           checkups={done}
-          emptyMessage="No completed checkups yet."
+          emptyMessage={loading ? "Loading..." : "No completed checkups yet."}
         />
       </div>
 

@@ -1,6 +1,6 @@
 import Sparkline from "./Sparkline";
 
-export type VitalStatus = "High" | "Normal" | "Low";
+export type VitalStatus = "High" | "Normal" | "Low" | "No data" | "Loading";
 
 type VitalCardProps = {
   label: string;
@@ -9,6 +9,8 @@ type VitalCardProps = {
   status: VitalStatus;
   /** Recent readings, oldest first. The last one gets the end dot. */
   trend: number[];
+  /** When each `trend` reading was taken (ms); lets the line slide when readings update. */
+  trendTimes?: number[];
   /** Line color for the sparkline. */
   accent?: string;
 };
@@ -19,6 +21,7 @@ export default function VitalCard({
   unit,
   status,
   trend,
+  trendTimes,
   accent,
 }: VitalCardProps) {
   return (
@@ -33,7 +36,7 @@ export default function VitalCard({
         <span className="vital-card__unit">{unit}</span>
       </p>
 
-      <Sparkline data={trend} color={accent} />
+      <Sparkline data={trend} times={trendTimes} color={accent} />
     </article>
   );
 }

@@ -5,7 +5,15 @@ import { HttpError } from '../../middleware/errors.js';
 import { requireUser } from '../users/service.js';
 import { getSummary } from '../vitals/service.js';
 import { VITALS, VITAL_TYPES } from '../vitals/types.js';
-import { buildMessages, fallbackQuestion, parseAssistantReply, type PromptContext } from './prompt.js';
+import {
+    buildClosingMessages,
+    buildMessages,
+    fallbackQuestion,
+    parseAssistantReply,
+    parseClosingTips,
+    type PromptContext,
+} from './prompt.js';
+import { EMERGENCY_MESSAGE, composeClosingNote, detectEmergency, filterTips } from './safety.js';
 import type { UserThreadsQuery } from './schemas.js';
 
 const LLM_ATTEMPTS = 2; // a second try only happens when the reply could not be parsed
@@ -99,6 +107,35 @@ async function generateTurn(threadId: number, requireQuestion: boolean): Promise
     return { question: fallbackQuestion(assistantCount), done: false };
 }
 
+/**
+ * The last message of a thread, with a few very general self-care tips written by the model.
+ * Never throws for model problems: without usable tips the thread still ends with a plain
+ * closing line. Whatever the model writes is filtered, and the framing is fixed text (safety.ts).
+ */
+async function generateClosingNote(threadId: number): Promise<string> {
+    const { ctx } = await buildPromptContext(threadId);
+    const messages = buildClosingMessages(ctx);
+
+    for (let attempt = 1; attempt <= LLM_ATTEMPTS; attempt++) {
+        let raw: string;
+        try {
+            raw = await llm.chat(messages);
+        } catch (err) {
+            console.warn(`[assistant] closing tips failed, closing without them: ${err instanceof Error ? err.message : err}`);
+            break;
+        }
+        const tips = parseClosingTips(raw);
+        if (!tips) {
+            console.warn(`[assistant] unusable closing reply (attempt ${attempt}/${LLM_ATTEMPTS}): ${raw.slice(0, 120)}`);
+            continue;
+        }
+        const { kept, dropped } = filterTips(tips);
+        if (dropped.length) console.warn(`[assistant] dropped ${dropped.length} closing tip(s): ${JSON.stringify(dropped).slice(0, 300)}`);
+        return composeClosingNote(kept);
+    }
+    return composeClosingNote([]);
+}
+
 // ---------------------------------------------------------------- threads
 
 /** Creates the (empty) thread row. The opening question is added by addOpeningQuestion(). */
@@ -106,8 +143,27 @@ export function createThreadRow(symptomId: number) {
     return prisma.followupThread.create({ data: { symptomId } });
 }
 
+/**
+ * Stores the assistant's last message and closes the thread, in one transaction so a client
+ * polling the thread never sees the final message on a thread that still looks open.
+ */
+async function finishThread(threadId: number, content: string): Promise<void> {
+    await prisma.$transaction([
+        prisma.followupMessage.create({ data: { threadId, role: 'assistant', content } }),
+        prisma.followupThread.update({ where: { id: threadId }, data: { status: 'done', closedAt: new Date() } }),
+    ]);
+}
+
 export async function addOpeningQuestion(threadId: number): Promise<void> {
+    const { symptom } = await prisma.followupThread.findUniqueOrThrow({
+        where: { id: threadId },
+        select: { symptom: { select: { name: true, notes: true } } },
+    });
+    // Checked in code, before the model is asked anything
+    if (detectEmergency(symptom.name, symptom.notes)) return finishThread(threadId, EMERGENCY_MESSAGE);
+
     const turn = await generateTurn(threadId, true);
+    if (turn.done) return finishThread(threadId, turn.question!); // the model opened with an emergency notice
     await prisma.followupMessage.create({ data: { threadId, role: 'assistant', content: turn.question! } });
 }
 
@@ -170,14 +226,11 @@ export async function listUserThreads(userId: number, { from, to, limit, offset 
 // ---------------------------------------------------------------- answering
 
 export interface AnswerResult {
-    // The next question. With done=true it is a closing message (e.g. an emergency notice)
-    // that expects no answer. null when the thread simply ended.
+    // The next question. With done=true it is the closing message (self-care tips, or an
+    // urgent-care notice) that expects no answer.
     nextQuestion: string | null;
     done: boolean;
 }
-
-const closeThread = (threadId: number) =>
-    prisma.followupThread.update({ where: { id: threadId }, data: { status: 'done', closedAt: new Date() } });
 
 /**
  * Stores the patient's answer and produces the next turn. Two phases so the (slow) model
@@ -202,15 +255,23 @@ export async function submitAnswer(threadId: number, answer: string): Promise<An
         return { assistantCount: thread.messages.filter((m) => m.role === 'assistant').length };
     });
 
-    if (assistantCount >= config.ASSISTANT_MAX_QUESTIONS) {
-        await closeThread(threadId);
-        return { nextQuestion: null, done: true };
+    // An emergency is recognised in code, so it never depends on what the model makes of it
+    if (detectEmergency(answer)) {
+        await finishThread(threadId, EMERGENCY_MESSAGE);
+        return { nextQuestion: EMERGENCY_MESSAGE, done: true };
     }
 
+    const endWithClosingNote = async (): Promise<AnswerResult> => {
+        const note = await generateClosingNote(threadId);
+        await finishThread(threadId, note);
+        return { nextQuestion: note, done: true };
+    };
+
+    if (assistantCount >= config.ASSISTANT_MAX_QUESTIONS) return endWithClosingNote();
+
     const turn = await generateTurn(threadId, false);
-    if (turn.question) {
-        await prisma.followupMessage.create({ data: { threadId, role: 'assistant', content: turn.question } });
-    }
-    if (turn.done) await closeThread(threadId);
+    if (turn.done && !turn.question) return endWithClosingNote(); // the model has what it needs
+    if (turn.done) await finishThread(threadId, turn.question!); // done with a message is the model's own urgent notice
+    else await prisma.followupMessage.create({ data: { threadId, role: 'assistant', content: turn.question! } });
     return { nextQuestion: turn.question, done: turn.done };
 }

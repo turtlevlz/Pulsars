@@ -1,4 +1,3 @@
-import { useState } from "react";
 import VitalCard from "../components/VitalCard";
 import type { VitalStatus } from "../components/VitalCard";
 import Checkups from "../components/Checkups";
@@ -6,101 +5,106 @@ import CheckupModal from "../components/CheckupModal";
 import SymptomLog from "../components/SymptomLog";
 import type { SymptomEntry } from "../components/SymptomLog";
 import HealthAssistant from "../components/HealthAssistant";
-import type { ChatMessage } from "../components/HealthAssistant";
+import { useAssistant } from "../hooks/useAssistant";
 import { useCheckups } from "../hooks/useCheckups";
+import { useVitals } from "../hooks/useVitals";
+import { createSymptom } from "../api/symptoms";
+import { VITAL_DEFINITIONS, vitalStatus } from "../lib/vitals";
 import "../styles/Pulsars.css";
 
-type Vital = {
-  id: string;
-  label: string;
-  value: string | number;
-  unit: string;
-  status: VitalStatus;
-  trend: number[];
-  accent: string;
-};
-
-// Placeholder data. Replace with your API or state later.
-const VITALS: Vital[] = [
-  {
-    id: "heart-rate",
-    label: "Heart Rate",
-    value: 120,
-    unit: "bpm",
-    status: "High",
-    trend: [62, 90, 80, 66, 88],
-    accent: "#3B82F6",
-  },
-  {
-    id: "body-temp",
-    label: "Body Temp.",
-    value: 36.2,
-    unit: "°C",
-    status: "Normal",
-    trend: [36.6, 36.2, 36.2, 36.3, 36.5, 36.3, 36.2],
-    accent: "#4F46E5",
-  },
-  {
-    id: "blood-oxygen",
-    label: "Blood Oxygen",
-    value: 97,
-    unit: "%",
-    status: "Normal",
-    trend: [96.5, 96.7, 96.4, 97, 97.1, 97, 96.6],
-    accent: "#4F46E5",
-  },
-];
-
-const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    id: "m1",
-    from: "assistant",
-    text: "I see a headache logged today. How long have you had it?",
-  },
-];
-
 export default function DashboardPage() {
-  const { checkups, activeCheckup, startCheckup, closeCheckup, completeCheckup } =
-    useCheckups();
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const {
+    checkups,
+    loading: checkupsLoading,
+    error: checkupsError,
+    activeCheckup,
+    startCheckup,
+    closeCheckup,
+    completeCheckup,
+  } = useCheckups();
+  const vitals = useVitals();
+  const assistant = useAssistant();
 
-  const handleSaveSymptom = (entry: SymptomEntry) => {
-    // Send the entry to your backend here
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        from: "assistant",
-        text: `I logged ${entry.symptom.toLowerCase()} at severity ${entry.severity}. How long have you had it?`,
-      },
-    ]);
+  const vitalCards = VITAL_DEFINITIONS.map(({ id, type, decimals, normal, ...definition }) => {
+    const readings = vitals.series[type] ?? [];
+    const latest = readings.at(-1);
+
+    const status: VitalStatus = latest
+      ? vitalStatus(latest.value, normal)
+      : vitals.loading
+        ? "Loading"
+        : "No data";
+
+    return {
+      id,
+      label: definition.label,
+      unit: definition.unit,
+      accent: definition.accent,
+      value: latest ? latest.value.toFixed(decimals) : "--",
+      status,
+      trend: readings.map((r) => r.value),
+      trendTimes: readings.map((r) => Date.parse(r.recordedAt)),
+    };
+  });
+
+  // Saving a symptom opens a follow-up thread on the server; the assistant picks it up
+  const handleSaveSymptom = async (entry: SymptomEntry) => {
+    const created = await createSymptom(entry);
+    assistant.follow(created.threadId);
   };
 
-  const handleSend = (text: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), from: "user", text },
-    ]);
-    // Call your assistant endpoint here and append its reply
-  };
+  const canAnswer =
+    assistant.threadId !== null && !assistant.closed && !assistant.busy;
+  const placeholder =
+    assistant.threadId === null
+      ? "Log a symptom to start"
+      : assistant.closed
+        ? "This follow-up is finished"
+        : assistant.busy
+          ? "Waiting for the assistant..."
+          : "Type your answer...";
+
+  const problem = vitals.error ?? checkupsError;
 
   return (
     <main className="pulsars">
+      {problem && (
+        <p role="alert" className="notice">
+          {problem}
+        </p>
+      )}
+
       <div className="dashboard">
         <div className="dashboard__main">
           <div className="dashboard__vitals">
-            {VITALS.map(({ id, ...vital }) => (
+            {vitalCards.map(({ id, ...vital }) => (
               <VitalCard key={id} {...vital} />
             ))}
           </div>
 
           <div className="dashboard__panels">
-            <Checkups checkups={checkups} onStart={startCheckup} />
+            <Checkups
+              checkups={checkups}
+              onStart={startCheckup}
+              emptyMessage={
+                checkupsLoading
+                  ? "Loading checkups..."
+                  : "No checkups assigned to you yet."
+              }
+            />
             <SymptomLog onSave={handleSaveSymptom} />
           </div>
         </div>
 
-        <HealthAssistant messages={messages} onSend={handleSend} />
+        <HealthAssistant
+          messages={assistant.messages}
+          onSend={(text) => void assistant.send(text)}
+          busy={assistant.busy}
+          disabled={!canAnswer}
+          placeholder={placeholder}
+          emptyText="Log a symptom and I'll ask a few follow-up questions."
+          error={assistant.error}
+        />
       </div>
 
       {activeCheckup && (

@@ -857,3 +857,213 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ---------- Dashboard: fit in one viewport (no page scroll) ---------- */
+:root { --nav-h: 53px; } /* set to your real nav height */
+
+.pulsars:has(.dashboard) {
+  height: calc(100dvh - var(--nav-h));
+  box-sizing: border-box;
+  padding: 20px 32px;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.dashboard {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.dashboard__main {
+  min-height: 0;
+  gap: 20px;
+}
+
+/* Equal-height vital cards, even if each one is wrapped in another element */
+.dashboard__vitals {
+  align-items: stretch;
+  gap: 16px;
+}
+.dashboard__vitals > * {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard .card { padding: 16px 20px; }
+.dashboard .vital-card__reading { margin: 4px 0 8px; }
+.dashboard .vital-card__value { font-size: 2.1rem; }
+.dashboard .sparkline { height: 56px; }
+
+/* Panels fill the remaining height; each scrolls internally if needed */
+.dashboard__panels {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+}
+.dashboard__panels > .card {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.checkups__list { margin-top: 12px; gap: 8px; }
+.checkup { padding: 8px 12px; }
+.checkup .btn { padding: 8px 14px; }
+
+.symptom-log__form { gap: 10px; margin-top: 10px; }
+.field__control { padding: 9px 14px; }
+.field__control--textarea { min-height: 56px; }
+.severity__btn { width: 38px; height: 38px; }
+
+/* Assistant fills the column instead of forcing 560px */
+.assistant {
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+}/* ---------- Dashboard: fit in one viewport (no page scroll) ---------- */
+:root { --nav-h: 53px; } /* set to your real nav height */
+
+.pulsars:has(.dashboard) {
+  height: calc(100dvh - var(--nav-h));
+  box-sizing: border-box;
+  padding: 20px 32px;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.dashboard {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.dashboard__main {
+  min-height: 0;
+  gap: 20px;
+}
+
+/* Equal-height vital cards, even if each one is wrapped in another element */
+.dashboard__vitals {
+  align-items: stretch;
+  gap: 16px;
+}
+.dashboard__vitals > * {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard .card { padding: 16px 20px; }
+.dashboard .vital-card__reading { margin: 4px 0 8px; }
+.dashboard .vital-card__value { font-size: 2.1rem; }
+.dashboard .sparkline { height: 56px; }
+
+/* Panels fill the remaining height; each scrolls internally if needed */
+.dashboard__panels {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+}
+.dashboard__panels > .card {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.checkups__list { margin-top: 12px; gap: 8px; }
+.checkup { padding: 8px 12px; }
+.checkup .btn { padding: 8px 14px; }
+
+.symptom-log__form { gap: 10px; margin-top: 10px; }
+.field__control { padding: 9px 14px; }
+.field__control--textarea { min-height: 56px; }
+.severity__btn { width: 38px; height: 38px; }
+
+/* Assistant fills the column instead of forcing 560px */
+.assistant {
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+
+/* Every panel and the assistant column share the same height */
+.dashboard > *,
+.dashboard__panels > * {
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* If a wrapper sits around a card, pass the height through to it */
+.dashboard__panels > * > .card,
+.dashboard > * > .card {
+  height: 100%;
+}
+
+/* Symptom log: card is a column, the form fills it, the notes box absorbs the slack */
+.dashboard__panels .card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.symptom-log__form {
+  flex: 1;
+  min-height: 0;
+}
+
+.symptom-log__form .field:has(.field__control--textarea) {
+  flex: 1;
+  min-height: 0;
+}
+
+.field__control--textarea {
+  flex: 1;
+  min-height: 56px;
+  resize: none;
+}
+
+/* Checkups list scrolls inside its card instead of growing it */
+.checkups__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* ---------- Server state: errors, loading, disabled inputs ---------- */
+.notice {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid #7a2e3c;
+  border-radius: var(--radius-inner);
+  background: rgba(255, 107, 129, 0.1);
+  color: #ffb3c0;
+  font-size: 0.9rem;
+}
+
+.form-error {
+  margin: 0;
+  color: #ff9aa9;
+  font-size: 0.9rem;
+}
+
+.assistant__empty {
+  margin: auto 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.bubble--typing {
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+.assistant__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* The assistant's closing message is a short list, so keep its line breaks */
+.bubble {
+  white-space: pre-line;
+}

@@ -5,11 +5,13 @@ import QuestionField from "./QuestionField";
 import type { Checkup } from "./Checkups";
 import { isAnswered, toAnswers } from "../lib/questionnaire";
 import type { CheckupAnswers, RawAnswers } from "../lib/questionnaire";
+import { errorMessage } from "../api/client";
 
 type CheckupModalProps = {
   checkup: Checkup;
   onClose: () => void;
-  onComplete: (id: string, answers: CheckupAnswers) => void;
+  /** May be async. If it throws, the message is shown and the modal stays open. */
+  onComplete: (id: string, answers: CheckupAnswers) => void | Promise<void>;
 };
 
 export default function CheckupModal({
@@ -25,6 +27,8 @@ export default function CheckupModal({
   // Step 0 is the instructions screen, steps 1..total are the questions
   const [step, setStep] = useState(0);
   const [raw, setRaw] = useState<RawAnswers>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onIntro = step === 0;
   const isLast = step === total;
@@ -39,14 +43,23 @@ export default function CheckupModal({
         : "Finish"
       : "Next";
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!canContinue) return;
+    if (!canContinue || submitting) return;
 
-    if (isLast) {
-      onComplete(checkup.id, toAnswers(questions, raw));
-    } else {
+    if (!isLast) {
       setStep((s) => s + 1);
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onComplete(checkup.id, toAnswers(questions, raw));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -124,6 +137,12 @@ export default function CheckupModal({
               </>
             )
           )}
+
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
         </div>
 
         <footer className="modal__footer">
@@ -135,6 +154,7 @@ export default function CheckupModal({
             <button
               type="button"
               className="btn btn--ghost"
+              disabled={submitting}
               onClick={() => setStep((s) => s - 1)}
             >
               Back
@@ -144,9 +164,9 @@ export default function CheckupModal({
           <button
             type="submit"
             className="btn btn--primary"
-            disabled={!canContinue}
+            disabled={!canContinue || submitting}
           >
-            {nextLabel}
+            {submitting ? "Saving..." : nextLabel}
           </button>
         </footer>
       </form>
