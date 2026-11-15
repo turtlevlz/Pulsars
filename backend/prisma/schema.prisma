@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  patient
+  medic
+}
+
+enum Frequency {
+  once
+  daily
+  several_daily
+  weekly
+  constant
+}
+
+enum CheckupStatus {
+  assigned
+  completed
+}
+
+enum ThreadStatus {
+  open
+  done
+}
+
+enum MessageRole {
+  assistant
+  patient
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  passwordHash String   @map("password_hash")
+  role         Role     @default(patient)
+  weight       Float?
+  height       Float?
+  age          Int?
+
+  // Lifetime averages, written only by vitals ingestion (see docs/plan.md §3.1).
+  avgHr   Float? @map("avg_hr")
+  avgBt   Float? @map("avg_bt")
+  avgBo   Float? @map("avg_bo")
+  hrCount Int    @default(0) @map("hr_count")
+  btCount Int    @default(0) @map("bt_count")
+  boCount Int    @default(0) @map("bo_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  heartRates      HeartRate[]
+  bodyTemps       BodyTemp[]
+  bloodOxygens    BloodOxygen[]
+  symptoms        Symptom[]
+  patientCheckups Checkup[]     @relation("PatientCheckups")
+  medicCheckups   Checkup[]     @relation("MedicCheckups")
+
+  @@map("users")
+}
+
+model HeartRate {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  heartRate  Float    @map("heart_rate")
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recordedAt])
+  @@map("heart_rates")
+}
+
+model BodyTemp {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  bodyTemp   Float    @map("body_temp")
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recordedAt])
+  @@map("body_temps")
+}
+
+model BloodOxygen {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  bloodO     Float    @map("blood_o")
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recordedAt])
+  @@map("blood_oxygens")
+}
+
+model Symptom {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  name            String
+  // 1-5, enforced by a CHECK constraint added in the init migration.
+  intensity       Int
+  notes           String?
+  durationMinutes Int?      @map("duration_minutes")
+  frequency       Frequency
+  loggedAt        DateTime  @default(now()) @map("logged_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threads FollowupThread[]
+
+  @@index([userId, loggedAt])
+  @@map("symptoms")
+}
+
+model Checkup {
+  id          Int           @id @default(autoincrement())
+  userId      Int           @map("user_id")
+  medicId     Int           @map("medic_id")
+  name        String
+  description String?
+  status      CheckupStatus @default(assigned)
+  assignedAt  DateTime      @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  dueAt       DateTime?     @map("due_at") @db.Timestamptz(6)
+  completedAt DateTime?     @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  patient   User       @relation("PatientCheckups", fields: [userId], references: [id], onDelete: Cascade)
+  medic     User       @relation("MedicCheckups", fields: [medicId], references: [id])
+  questions Question[]
+
+  @@index([userId, status])
+  @@index([medicId])
+  @@map("checkups")
+}
+
+model Question {
+  id        Int      @id @default(autoincrement())
+  checkupId Int      @map("checkup_id")
+  question  String
+  answer    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  checkup Checkup @relation(fields: [checkupId], references: [id], onDelete: Cascade)
+
+  @@index([checkupId])
+  @@map("questions")
+}
+
+model FollowupThread {
+  id        Int          @id @default(autoincrement())
+  symptomId Int          @map("symptom_id")
+  status    ThreadStatus @default(open)
+  createdAt DateTime     @default(now()) @map("created_at")
+  closedAt  DateTime?    @map("closed_at")
+
+  symptom  Symptom           @relation(fields: [symptomId], references: [id], onDelete: Cascade)
+  messages FollowupMessage[]
+
+  @@index([symptomId])
+  @@map("followup_threads")
+}
+
+model FollowupMessage {
+  id        Int         @id @default(autoincrement())
+  threadId  Int         @map("thread_id")
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  thread FollowupThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("followup_messages")
+}
