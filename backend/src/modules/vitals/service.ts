@@ -1,10 +1,11 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../db.js';
 import { HttpError } from '../../middleware/errors.js';
+import { ensureBaselines } from '../metrics/baselines.js';
+import { metric, metricsConfig } from '../metrics/config.js';
 import { requireUser } from '../users/service.js';
 import { getBuckets } from './buckets.js';
 import type { Reading, SeriesQuery, SummaryQuery, TrendQuery } from './schemas.js';
-import { THRESHOLDS } from './thresholds.js';
 import { VITALS, VITAL_TYPES, type VitalType } from './types.js';
 
 const ident = (name: string) => Prisma.raw(`"${name}"`);
@@ -100,9 +101,32 @@ const DAY_MS = 24 * 3600_000;
 const MAX_TREND_RANGE_MS = 31 * DAY_MS;
 
 /**
- * A readable trend over any range: bucketed averages (see buckets.ts) plus the vital's
- * reference limit. The bucket length is chosen so about `points` buckets cover the range, and
- * is never shorter than a minute. Defaults to the last 24 hours.
+ * The band that is "normal for this person" around each bucket of a trend: the resting heart
+ * rate within 10% of the baseline, the skin temperature within 0.5 °C of the person's own curve
+ * for that hour. Blood oxygen has absolute limits only, so it has no band.
+ */
+async function baselineBand(userId: number, type: VitalType, times: Date[]) {
+    if (type === 'bo' || times.length === 0) return null;
+    const b = await ensureBaselines(userId);
+    if (type === 'hr') {
+        if (!b.hr) return null;
+        const pct = metric('hr_resting').params.green_band_pct / 100;
+        return times.map((t) => ({ t, low: b.hr!.median * (1 - pct), high: b.hr!.median * (1 + pct) }));
+    }
+    if (!b.temp) return null;
+    const delta = metric('skin_temp').params.yellow_delta_c;
+    const points = times.flatMap((t) => {
+        const usual = b.temp!.byHour[t.getUTCHours()];
+        return usual === null ? [] : [{ t, low: usual - delta, high: usual + delta }];
+    });
+    return points.length > 0 ? points : null;
+}
+
+/**
+ * A readable trend over any range: bucketed averages (see buckets.ts), the vital's reference
+ * limit from config/metrics.json and, where the person has one, their baseline band. The bucket
+ * length is chosen so about `points` buckets cover the range, and is never shorter than a
+ * minute. Defaults to the last 24 hours.
  */
 export async function getTrend(userId: number, { type, from, to, points }: TrendQuery) {
     await requireUser(userId);
@@ -120,7 +144,9 @@ export async function getTrend(userId: number, { type, from, to, points }: Trend
         from: start,
         to: end,
         bucketSeconds,
-        threshold: THRESHOLDS[type],
+        /** Dashed reference line, or null where a single absolute limit would mislead (skin temperature). */
+        threshold: metricsConfig.chart_limits[type],
+        baseline: await baselineBand(userId, type, buckets.map((b) => b.t)),
         points: buckets.map(({ t, avg, min, max }) => ({ t, avg, min, max })),
     };
 }

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { VITAL_TYPES } from '../vitals/types.js';
 
 export const idParams = z.object({ id: z.coerce.number().int().positive() });
 
@@ -15,7 +14,8 @@ export const alertsQuery = z
     .refine((q) => !q.from || !q.to || q.from <= q.to, { message: '`from` must not be after `to`' });
 
 export const acknowledgeBody = z.strictObject({
-    type: z.enum(VITAL_TYPES),
+    // a metric id (`hr_resting`) or a cross-rule id (`volume_loss_or_infection`)
+    ruleId: z.string().trim().min(1).max(64),
     startedAt: dateTime,
 });
 

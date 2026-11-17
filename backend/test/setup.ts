@@ -6,7 +6,8 @@ import { resetThrottle } from '../src/modules/auth/throttle.js';
 
 const TABLES = [
     'followup_messages', 'followup_threads', 'questions', 'checkups', 'symptoms',
-    'heart_rates', 'body_temps', 'blood_oxygens', 'fitness_windows', 'routine_completions', 'users',
+    'heart_rates', 'body_temps', 'blood_oxygens', 'fitness_windows', 'routine_completions',
+    'log_entries', 'baselines', 'alert_acknowledgements', 'users',
 ];
 
 beforeEach(async () => {

@@ -1,5 +1,7 @@
+import type { MetricStatus } from "../api/metrics";
 import { useNow } from "../hooks/useNow";
 import { STALE_AFTER_MS, formatAge } from "../lib/vitals";
+import TierNote from "./metrics/TierNote";
 import Sparkline from "./Sparkline";
 
 type VitalCardProps = {
@@ -16,6 +18,10 @@ type VitalCardProps = {
   trendTimes?: number[];
   /** Line color for the sparkline. */
   accent?: string;
+  /** The metric's health tier. Left out where tiers are not shown. */
+  status?: MetricStatus | null;
+  /** Where "Details" goes. */
+  detailsTo?: string;
 };
 
 export default function VitalCard({
@@ -27,6 +33,8 @@ export default function VitalCard({
   trend,
   trendTimes,
   accent,
+  status,
+  detailsTo,
 }: VitalCardProps) {
   const now = useNow();
   // A device clock a little ahead of ours must not show a negative age
@@ -34,8 +42,11 @@ export default function VitalCard({
   const stale = age !== null && age > STALE_AFTER_MS;
   const state = age === null ? (loading ? "Loading" : "No data") : stale ? "Stale" : "Live";
 
+  const tiered = status !== undefined;
   return (
-    <article className={`card vital-card${stale ? " vital-card--stale" : ""}`}>
+    <article
+      className={`card vital-card${stale ? " vital-card--stale" : ""}${tiered ? ` vital-card--${status?.level ?? "gray"}` : ""}`}
+    >
       <header className="vital-card__header">
         <h2 className="card__title">{label}</h2>
         <span className={`pill${state === "Live" ? "" : " pill--quiet"}`}>{state}</span>
@@ -48,6 +59,8 @@ export default function VitalCard({
       </p>
 
       <Sparkline data={trend} times={trendTimes} color={accent} />
+
+      {tiered && <TierNote status={status} detailsTo={detailsTo} withBadge />}
     </article>
   );
 }

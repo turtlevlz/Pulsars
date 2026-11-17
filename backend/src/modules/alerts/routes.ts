@@ -5,10 +5,11 @@ import { assertCanViewPatient } from '../auth/access.js';
 import { acknowledgeBody, alertsQuery, idParams, type AcknowledgeBody, type AlertsQuery } from './schemas.js';
 import * as service from './service.js';
 
-// Alerts are for the medic who follows the patient; patients don't see or acknowledge them.
+// The patient sees their own alerts and the medic who follows them sees them too; only a medic
+// acknowledges (a patient cannot dismiss a warning about themselves).
 export const alertsRouter = Router();
 
-alertsRouter.get('/users/:id/alerts', requireRole('medic'), validate({ params: idParams, query: alertsQuery }), async (req, res) => {
+alertsRouter.get('/users/:id/alerts', validate({ params: idParams, query: alertsQuery }), async (req, res) => {
     const { params, query } = res.locals.valid;
     await assertCanViewPatient(actor(req), params.id);
     res.json(await service.listAlerts(params.id, query as AlertsQuery));

@@ -9,6 +9,7 @@ import {
     fallbackQuestion,
     parseAssistantReply,
     parseClosingTips,
+    repeatsEarlierQuestion,
     type PromptContext,
 } from '../src/modules/assistant/prompt.js';
 
@@ -43,6 +44,32 @@ describe('parseAssistantReply', () => {
     it('caps very long questions', () => {
         const reply = parseAssistantReply(JSON.stringify({ question: 'x'.repeat(5000), done: false }));
         expect(reply!.question).toHaveLength(500);
+    });
+});
+
+describe('repeatsEarlierQuestion', () => {
+    const transcript = [
+        { role: 'assistant', content: 'Okay, since this morning. How long does each episode last?' },
+        { role: 'patient', content: 'About ten minutes.' },
+    ];
+
+    it.each([
+        ['the same words', 'How long does each episode last?'],
+        ['the same question with a different acknowledgement', "Thanks for that. How long does each episode last?"],
+        ['different case and punctuation', 'how long does each EPISODE last'],
+    ])('spots %s', (_label, question) => {
+        expect(repeatsEarlierQuestion(question, transcript)).toBe(true);
+    });
+
+    it.each([
+        ['a different question', 'Does anything make it better?'],
+        ['an answer repeated by the patient, not the assistant', 'About ten minutes.'],
+    ])('lets through %s', (_label, question) => {
+        expect(repeatsEarlierQuestion(question, transcript)).toBe(false);
+    });
+
+    it('is false for an empty transcript', () => {
+        expect(repeatsEarlierQuestion('When did it start?', [])).toBe(false);
     });
 });
 
@@ -124,19 +151,25 @@ describe('buildMessages', () => {
         expect(SYSTEM_PROMPT).toMatch(/contact their medic/i);
         expect(SYSTEM_PROMPT).toMatch(/JSON/);
     });
+
+    it('leaves the end of the conversation to the model, with no fixed number of questions', () => {
+        expect(SYSTEM_PROMPT).toMatch(/you decide when the conversation is finished/i);
+        expect(SYSTEM_PROMPT).not.toMatch(/\b(?:three|four|five|\d+) questions\b/i);
+    });
 });
 
 describe('parseClosingTips', () => {
     it.each([
-        ['plain JSON', '{"tips":["Rest.","Drink water."]}', ['Rest.', 'Drink water.']],
-        ['markdown fence', '```json\n{"tips":["Rest."]}\n```', ['Rest.']],
-        ['chatter around it', 'Here you go: {"tips":["Rest."]} Take care!', ['Rest.']],
-        ['no tips at all', '{"tips":[]}', []],
+        ['plain JSON', '{"routine":["Rest.","Drink water."]}', ['Rest.', 'Drink water.']],
+        ['markdown fence', '```json\n{"routine":["Rest."]}\n```', ['Rest.']],
+        ['chatter around it', 'Here you go: {"routine":["Rest."]} Take care!', ['Rest.']],
+        ['no steps at all', '{"routine":[]}', []],
+        ['the older "tips" key', '{"tips":["Rest."]}', ['Rest.']],
     ])('reads %s', (_label, raw, expected) => {
         expect(parseClosingTips(raw)).toEqual(expected);
     });
 
-    it.each([['not JSON'], ['{"tips":"rest"}'], ['{"advice":["Rest."]}'], ['{"tips":[1,2]}'], ['{broken']])('rejects %s', (raw) => {
+    it.each([['not JSON'], ['{"routine":"rest"}'], ['{"advice":["Rest."]}'], ['{"routine":[1,2]}'], ['{broken']])('rejects %s', (raw) => {
         expect(parseClosingTips(raw)).toBeNull();
     });
 });
@@ -157,10 +190,10 @@ describe('buildClosingMessages', () => {
         expect(messages[1].content).toContain('Q: Since when?\nA: Monday');
     });
 
-    it('the closing prompt allows only non-medical tips and asks for JSON', () => {
-        expect(CLOSING_PROMPT).toMatch(/non-medical/i);
+    it('the closing prompt asks for a routine without diagnosis or medicine, as JSON', () => {
+        expect(CLOSING_PROMPT).toMatch(/routine/i);
         expect(CLOSING_PROMPT).toMatch(/never diagnose/i);
         expect(CLOSING_PROMPT).toMatch(/never mention medicines/i);
-        expect(CLOSING_PROMPT).toMatch(/"tips"/);
+        expect(CLOSING_PROMPT).toMatch(/"routine"/);
     });
 });

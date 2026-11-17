@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { prisma } from '../src/db.js';
 import { LlmError, setLlmClient } from '../src/llm/client.js';
 import { CLOSING_PROMPT, FALLBACK_QUESTIONS } from '../src/modules/assistant/prompt.js';
+import { MAX_ASSISTANT_QUESTIONS } from '../src/modules/assistant/service.js';
 import { EMERGENCY_MESSAGE } from '../src/modules/assistant/safety.js';
 import { api, assignCheckup, makeMedic, makePatient, makeSymptom, reply, scriptedLlm } from './helpers.js';
 
 type As = { token: string };
 const answer = (as: As, threadId: number, text = 'an answer') => api(as).post(`/threads/${threadId}/messages`).send({ answer: text });
 const openThread = (as: As, symptomId: number) => api(as).post(`/symptoms/${symptomId}/threads`);
-const tipsReply = (...tips: string[]) => JSON.stringify({ tips });
+const routineReply = (...steps: string[]) => JSON.stringify({ routine: steps });
 const messagesOf = (threadId: number) => prisma.followupMessage.findMany({ where: { threadId }, orderBy: { id: 'asc' } });
 const thread = (id: number) => prisma.followupThread.findUniqueOrThrow({ where: { id } });
 
@@ -128,79 +129,128 @@ describe('POST /threads/:id/messages', () => {
         expect(sent[3].content).toBe('Since Monday');
     });
 
-    it('closes the thread after the maximum number of questions with a closing note of general tips', async () => {
+    it('keeps asking past four questions while the model has more to ask, then closes with a routine', async () => {
         const { patient, threadId, calls } = await started([
-            reply('Q1?'), reply('Q2?'), reply('Q3?'), reply('Q4?'),
-            tipsReply('rest in a quiet room', 'Drink some water.'),
+            reply('Q1?'), reply('Q2?'), reply('Q3?'), reply('Q4?'), reply('Q5?'), reply('Q6?'), reply(null, true),
+            routineReply('rest in a quiet room', 'Drink some water.', 'Write down when it happens.'),
         ]);
-        expect((await answer(patient, threadId, 'a1')).body).toEqual({ nextQuestion: 'Q2?', done: false });
-        expect((await answer(patient, threadId, 'a2')).body).toEqual({ nextQuestion: 'Q3?', done: false });
-        expect((await answer(patient, threadId, 'a3')).body).toEqual({ nextQuestion: 'Q4?', done: false });
+        for (const [i, next] of ['Q2?', 'Q3?', 'Q4?', 'Q5?', 'Q6?'].entries()) {
+            expect((await answer(patient, threadId, `a${i + 1}`)).body).toEqual({ nextQuestion: next, done: false });
+        }
 
-        const last = await answer(patient, threadId, 'a4');
+        const last = await answer(patient, threadId, 'a6');
         expect(last.body.done).toBe(true);
-        expect(last.body.nextQuestion).toContain('- Rest in a quiet room.\n- Drink some water.');
+        expect(last.body.nextQuestion).toContain('1. Rest in a quiet room.\n2. Drink some water.\n3. Write down when it happens.');
+        expect(last.body.nextQuestion).toMatch(/routine/i);
         expect(last.body.nextQuestion).toMatch(/not medical advice/i);
         expect(last.body.nextQuestion).toMatch(/contact your medic/i);
 
-        expect(calls).toHaveLength(5); // opening + three follow-ups + the closing note
-        const closing = calls[4];
+        expect(calls).toHaveLength(8); // opening + six follow-ups (the last one says done) + the closing routine
+        const closing = calls[7];
         expect(closing[0]).toEqual({ role: 'system', content: CLOSING_PROMPT });
         expect(closing[1].content).toContain('Name: Headache');
-        for (const line of ['Q: Q1?', 'A: a1', 'Q: Q4?', 'A: a4']) expect(closing[1].content).toContain(line);
+        for (const line of ['Q: Q1?', 'A: a1', 'Q: Q6?', 'A: a6']) expect(closing[1].content).toContain(line);
 
         const t = await thread(threadId);
         expect(t.status).toBe('done');
         expect(t.closedAt).not.toBeNull();
         const msgs = await messagesOf(threadId);
         expect(msgs.map((m) => m.role)).toEqual([
-            'assistant', 'patient', 'assistant', 'patient', 'assistant', 'patient', 'assistant', 'patient', 'assistant',
+            'assistant', 'patient', 'assistant', 'patient', 'assistant', 'patient',
+            'assistant', 'patient', 'assistant', 'patient', 'assistant', 'patient', 'assistant',
         ]);
         expect(msgs.at(-1)!.content).toBe(last.body.nextQuestion);
         expect((await answer(patient, threadId, 'too late')).status).toBe(409);
-        expect(await prisma.followupMessage.count({ where: { threadId } })).toBe(9);
+        expect(await prisma.followupMessage.count({ where: { threadId } })).toBe(13);
     });
 
-    it('closes with the plain line, not an invented tip, if the closing call fails or stays unreadable', async () => {
+    it('finishes with a routine when the model starts repeating itself, instead of asking the same thing again', async () => {
+        const { patient, threadId, calls } = await started([
+            reply('Okay. When did it start?'), reply('Does anything make it better?'),
+            reply('Thanks. When did it start?'), // the same question again
+            routineReply('Rest for a while.'),
+        ]);
+        expect((await answer(patient, threadId, 'a1')).body).toEqual({ nextQuestion: 'Does anything make it better?', done: false });
+
+        const res = await answer(patient, threadId, 'a2');
+        expect(res.body.done).toBe(true);
+        expect(res.body.nextQuestion).toContain('1. Rest for a while.');
+        expect(calls).toHaveLength(4); // opening, one follow-up, the repeat, the closing routine
+        expect((await thread(threadId)).status).toBe('done');
+        // the repeated question was never shown to the patient
+        expect((await messagesOf(threadId)).map((m) => m.content)).not.toContain('Thanks. When did it start?');
+    });
+
+    it('ends a thread whose model never says it is done, at the backstop', async () => {
+        const questions = Array.from({ length: MAX_ASSISTANT_QUESTIONS }, (_, i) => reply(`Q${i + 1}?`));
+        const { patient, threadId, calls } = await started([...questions, routineReply('Rest for a while.')]);
+        for (let i = 1; i < MAX_ASSISTANT_QUESTIONS; i++) {
+            expect((await answer(patient, threadId, `a${i}`)).body.done).toBe(false);
+        }
+        const last = await answer(patient, threadId, 'last answer');
+        expect(last.body.done).toBe(true);
+        expect(last.body.nextQuestion).toContain('1. Rest for a while.');
+        expect(calls).toHaveLength(MAX_ASSISTANT_QUESTIONS + 1);
+        expect((await thread(threadId)).status).toBe('done');
+    });
+
+    it('ends the thread instead of repeating generic questions when the model stays down', async () => {
+        const down = new LlmError('connection refused');
+        const { patient, threadId } = await started([down, down, down, down, down, down]);
+        const asked = [FALLBACK_QUESTIONS[0]];
+        for (const expected of FALLBACK_QUESTIONS.slice(1)) {
+            const res = await answer(patient, threadId, 'an answer');
+            expect(res.body).toEqual({ nextQuestion: expected, done: false });
+            asked.push(res.body.nextQuestion);
+        }
+        expect(asked).toEqual(FALLBACK_QUESTIONS);
+
+        const res = await answer(patient, threadId, 'an answer');
+        expect(res.body.done).toBe(true);
+        expect(res.body.nextQuestion).toMatch(/care team will review/i); // the plain closing line
+        expect((await thread(threadId)).status).toBe('done');
+    });
+
+    it('closes with the plain line, not an invented routine, if the closing call fails or stays unreadable', async () => {
         for (const script of [[new LlmError('down')], ['not json', 'still not json']]) {
             const { patient, threadId } = await started([reply('Q1?'), reply(null, true), ...script]);
             const res = await answer(patient, threadId, 'a1');
             expect(res.body.done).toBe(true);
             expect(res.body.nextQuestion).toMatch(/care team will review/i);
             expect(res.body.nextQuestion).toMatch(/contact your medic/i);
-            expect(res.body.nextQuestion).not.toContain('- ');
+            expect(res.body.nextQuestion).not.toMatch(/^\d+\. /m);
             expect((await thread(threadId)).status).toBe('done');
         }
     });
 
-    it('drops tips about medicine or causes and keeps the rest', async () => {
+    it('drops routine steps about medicine or causes and keeps the rest', async () => {
         const { patient, threadId } = await started([
             reply('Q1?'), reply(null, true),
-            tipsReply('Take 400 mg of ibuprofen.', 'Rest in a dark room.', 'This is probably caused by stress.'),
+            routineReply('Take 400 mg of ibuprofen.', 'Rest in a dark room.', 'This is probably caused by stress.'),
         ]);
         const { nextQuestion } = (await answer(patient, threadId, 'a1')).body;
-        expect(nextQuestion).toContain('- Rest in a dark room.');
+        expect(nextQuestion).toContain('1. Rest in a dark room.');
         expect(nextQuestion).not.toMatch(/ibuprofen|stress/i);
     });
 
-    it('uses the plain closing line when every tip is dropped', async () => {
-        const { patient, threadId } = await started([reply('Q1?'), reply(null, true), tipsReply('Take paracetamol.')]);
+    it('uses the plain closing line when every step is dropped', async () => {
+        const { patient, threadId } = await started([reply('Q1?'), reply(null, true), routineReply('Take paracetamol.')]);
         const { nextQuestion } = (await answer(patient, threadId, 'a1')).body;
         expect(nextQuestion).toMatch(/care team will review/i);
         expect(nextQuestion).not.toContain('paracetamol');
     });
 
     it('retries an unreadable closing reply once', async () => {
-        const { patient, threadId, calls } = await started([reply('Q1?'), reply(null, true), 'oops', tipsReply('Drink some water.')]);
-        expect((await answer(patient, threadId, 'a1')).body.nextQuestion).toContain('- Drink some water.');
+        const { patient, threadId, calls } = await started([reply('Q1?'), reply(null, true), 'oops', routineReply('Drink some water.')]);
+        expect((await answer(patient, threadId, 'a1')).body.nextQuestion).toContain('1. Drink some water.');
         expect(calls).toHaveLength(4);
     });
 
     it('closes early with a closing note when the model says it has enough information', async () => {
-        const { patient, threadId } = await started([reply('Q1?'), reply(null, true), tipsReply('Rest for a while.')]);
+        const { patient, threadId } = await started([reply('Q1?'), reply(null, true), routineReply('Rest for a while.')]);
         const res = await answer(patient, threadId);
         expect(res.body.done).toBe(true);
-        expect(res.body.nextQuestion).toContain('- Rest for a while.');
+        expect(res.body.nextQuestion).toContain('1. Rest for a while.');
         expect((await thread(threadId)).status).toBe('done');
         const msgs = await messagesOf(threadId);
         expect(msgs).toHaveLength(3);

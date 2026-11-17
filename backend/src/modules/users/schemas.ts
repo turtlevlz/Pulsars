@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PROFILE_IDS } from '../metrics/config.js';
 
 const age = z.number().int().min(0).max(130);
 const weight = z.number().min(1).max(500); // kg
@@ -42,6 +43,8 @@ export const updateUserBody = z
         age: age.nullable(),
         weight: weight.nullable(),
         height: height.nullable(),
+        // Where the person is (config/metrics.json "profiles"): decides which health checks are on.
+        environmentProfile: z.string().refine((id) => PROFILE_IDS.includes(id), { message: `must be one of ${PROFILE_IDS.join(', ')}` }),
     })
     .partial()
     .refine((b) => Object.keys(b).length > 0, { message: 'Provide at least one field to update' });

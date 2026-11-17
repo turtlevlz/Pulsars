@@ -11,6 +11,8 @@ import { symptomsRouter } from './modules/symptoms/routes.js';
 import { vitalsRouter } from './modules/vitals/routes.js';
 import { usersRouter } from './modules/users/routes.js';
 import { fitnessRouter } from './modules/fitness/routes.js';
+import { logsRouter } from './modules/logs/routes.js';
+import { metricsRouter } from './modules/metrics/routes.js';
 
 export const app = express();
 
@@ -35,6 +37,8 @@ app.use(fitnessRouter);
 app.use(assistantRouter);
 app.use(alertsRouter);
 app.use(patientsRouter);
+app.use(logsRouter);
+app.use(metricsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

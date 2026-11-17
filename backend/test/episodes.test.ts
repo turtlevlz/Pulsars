@@ -1,55 +1,71 @@
 import { describe, expect, it } from 'vitest';
-import { findEpisodes } from '../src/modules/alerts/episodes.js';
-import type { Bucket } from '../src/modules/vitals/buckets.js';
+import { groupEpisodes, MERGE_GAP_MINUTES, STEP_MINUTES } from '../src/modules/alerts/episodes.js';
+import type { Step } from '../src/modules/metrics/service.js';
+import { MINUTE, type AlertItem } from '../src/modules/metrics/types.js';
 
-const MIN = 60_000;
 const T0 = Date.UTC(2026, 10, 14, 10, 0, 0);
-const bucket = (minute: number, avg: number): Bucket => ({ t: new Date(T0 + minute * MIN), avg, min: avg, max: avg, count: 60 });
-const upper = { bound: 'upper', limit: 100 } as const;
-const lower = { bound: 'lower', limit: 92 } as const;
-const later = new Date(T0 + 24 * 3600_000);
+const item = (ruleId: string, level: 'yellow' | 'red', reason = `${ruleId} ${level}`): AlertItem => ({
+    ruleId,
+    kind: 'metric',
+    title: ruleId,
+    level,
+    reason,
+    recommendedAction: `act on ${ruleId}`,
+    escalateTo: level === 'red' ? 'crew medical officer' : null,
+    evidenceLevel: 'OUR_HEURISTIC',
+});
+/** A step `n` steps after T0, with the given items. */
+const step = (n: number, ...items: AlertItem[]): Step => ({ t: T0 + n * STEP_MINUTES * MINUTE, items });
 
-describe('findEpisodes', () => {
-    it('finds a run of breaching minutes and reports its start, length and peak', () => {
-        const episodes = findEpisodes([bucket(0, 80), bucket(1, 104), bucket(2, 110), bucket(3, 102), bucket(4, 85)], upper, later);
-        expect(episodes).toHaveLength(1);
-        expect(episodes[0]).toMatchObject({ durationMinutes: 3, peak: 110, ongoing: false });
-        expect(episodes[0].startedAt).toEqual(new Date(T0 + 1 * MIN));
-        expect(episodes[0].endedAt).toEqual(new Date(T0 + 4 * MIN));
+describe('groupEpisodes', () => {
+    it('turns a run of non-green steps into one alert with its start, end and length', () => {
+        const [e] = groupEpisodes([step(0), step(1, item('hr_resting', 'yellow')), step(2, item('hr_resting', 'yellow')), step(3, item('hr_resting', 'yellow')), step(4), step(10), step(11)]);
+        expect(e).toMatchObject({ ruleId: 'hr_resting', level: 'yellow', durationMinutes: 15, ongoing: false });
+        expect(e.startedAt).toEqual(new Date(T0 + 5 * MINUTE));
+        expect(e.endedAt).toEqual(new Date(T0 + 20 * MINUTE));
     });
 
-    it('needs the average to be past the limit: equal to it is not a breach', () => {
-        expect(findEpisodes([bucket(0, 100), bucket(1, 100), bucket(2, 100)], upper, later)).toEqual([]);
-        expect(findEpisodes([bucket(0, 92), bucket(1, 92)], lower, later)).toEqual([]);
+    it('is empty when nothing was ever yellow or red', () => {
+        expect(groupEpisodes([step(0), step(1), step(2)])).toEqual([]);
+        expect(groupEpisodes([])).toEqual([]);
     });
 
-    it('ignores a single breaching minute (a blip), and counts two in a row', () => {
-        expect(findEpisodes([bucket(0, 90), bucket(1, 120), bucket(2, 90)], upper, later)).toEqual([]);
-        expect(findEpisodes([bucket(0, 90), bucket(1, 120), bucket(2, 120), bucket(3, 90)], upper, later)).toHaveLength(1);
+    it('groups a yellow that turns red into one alert at the higher level, described by the red step', () => {
+        const eps = groupEpisodes([
+            step(0, item('spo2', 'yellow', 'low')),
+            step(1, item('spo2', 'yellow', 'low')),
+            step(2, item('spo2', 'red', 'very low')),
+            step(3, item('spo2', 'yellow', 'low')),
+        ]);
+        expect(eps).toHaveLength(1);
+        expect(eps[0]).toMatchObject({ level: 'red', reason: 'very low', escalateTo: 'crew medical officer', durationMinutes: 20 });
+        expect(eps[0].startedAt).toEqual(new Date(T0));
     });
 
-    it('uses the lowest minute as the peak for a lower limit', () => {
-        const [episode] = findEpisodes([bucket(0, 91), bucket(1, 88), bucket(2, 90)], lower, later);
-        expect(episode.peak).toBe(88);
+    it('does not split an alert for a dip of up to 15 minutes, and does for a longer one', () => {
+        const dip = (greens: number) => groupEpisodes([step(0, item('bp', 'yellow')), ...Array.from({ length: greens }, (_, i) => step(i + 1)), step(greens + 1, item('bp', 'yellow'))]);
+        expect(MERGE_GAP_MINUTES).toBe(15);
+        expect(dip(2)).toHaveLength(1); // 15 minutes between the two yellow steps
+        expect(dip(3)).toHaveLength(2); // 20 minutes
+        // the quiet steps in between do not count towards the length
+        expect(dip(2)[0].durationMinutes).toBe(20);
     });
 
-    it('splits episodes at a healthy minute and at a gap in the data', () => {
-        const healthy = findEpisodes([bucket(0, 110), bucket(1, 110), bucket(2, 80), bucket(3, 110), bucket(4, 110)], upper, later);
-        expect(healthy).toHaveLength(2);
-        // minute 2 is missing altogether: the cuff was off, so the run does not continue across it
-        const gap = findEpisodes([bucket(0, 110), bucket(1, 110), bucket(3, 110), bucket(4, 110)], upper, later);
-        expect(gap.map((e) => e.durationMinutes)).toEqual([2, 2]);
+    it('keeps rules apart', () => {
+        const eps = groupEpisodes([step(0, item('hr_resting', 'yellow'), item('skin_temp', 'yellow')), step(1, item('hr_resting', 'yellow'), item('skin_temp', 'yellow'), item('volume_loss_or_infection', 'red'))]);
+        expect(eps.map((e) => e.ruleId).sort()).toEqual(['hr_resting', 'skin_temp', 'volume_loss_or_infection']);
+        expect(eps.find((e) => e.ruleId === 'volume_loss_or_infection')?.startedAt).toEqual(new Date(T0 + 5 * MINUTE));
     });
 
-    it('marks an episode that reaches the present as ongoing', () => {
-        const now = new Date(T0 + 3 * MIN + 20_000);
-        const [episode] = findEpisodes([bucket(1, 110), bucket(2, 110), bucket(3, 110)], upper, now);
-        expect(episode.ongoing).toBe(true);
-        const [old] = findEpisodes([bucket(1, 110), bucket(2, 110)], upper, new Date(T0 + 30 * MIN));
-        expect(old.ongoing).toBe(false);
+    it('marks an alert that reaches the latest step as ongoing', () => {
+        expect(groupEpisodes([step(0), step(1, item('bp', 'red')), step(2, item('bp', 'red'))])[0].ongoing).toBe(true);
+        expect(groupEpisodes([step(0, item('bp', 'red')), step(1), step(2)])[0].ongoing).toBe(false);
     });
 
-    it('finds nothing in no data', () => {
-        expect(findEpisodes([], upper, later)).toEqual([]);
+    it('carries one recommended action and the evidence label with every alert', () => {
+        const [e] = groupEpisodes([step(0, item('bp', 'yellow'))]);
+        expect(e.recommendedAction).toBe('act on bp');
+        expect(e.evidenceLevel).toBe('OUR_HEURISTIC');
+        expect(e.escalateTo).toBeNull();
     });
 });

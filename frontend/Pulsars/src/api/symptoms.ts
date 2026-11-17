@@ -37,8 +37,8 @@ export function createSymptom({ symptom, severity, frequency, notes }: SymptomEn
 }
 
 /** Newest first. */
-export function listSymptoms(signal?: AbortSignal) {
-  return requestForUser<Symptom[]>("/symptoms?limit=50", { signal });
+export function listSymptoms(signal?: AbortSignal, limit = 50) {
+  return requestForUser<Symptom[]>(`/symptoms?limit=${limit}`, { signal });
 }
 
 export function symptomToRecord(symptom: Symptom): SymptomRecord {

@@ -41,6 +41,11 @@ export default function Navbar() {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/health-log" className={linkClass}>
+                Health Log
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/symptom-log" className={linkClass}>
                 Symptom Log
               </NavLink>

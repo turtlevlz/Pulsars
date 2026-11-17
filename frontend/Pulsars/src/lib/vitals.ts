@@ -1,8 +1,11 @@
+import type { MetricId } from "../api/metrics";
 import type { VitalType } from "../api/vitals";
 
 export type VitalDefinition = {
   id: string;
   type: VitalType;
+  /** The health tier that judges this vital (see the backend's config/metrics.json). */
+  metricId: MetricId;
   label: string;
   unit: string;
   /** Sparkline color. */
@@ -12,13 +15,15 @@ export type VitalDefinition = {
 };
 
 /**
- * The vitals shown on the dashboard. The cards show no Low / Normal / High judgement:
- * the wearable's readings are demo-grade and there is no clinical threshold behind them.
+ * The vitals shown on the dashboard. The big number is the live reading; the tier next to it
+ * (green / yellow / red / unknown) comes from the backend's engine, which compares it with the
+ * person's own baseline. The tiers are proposals, not NASA limits, and the sensor is wellness-grade.
  */
 export const VITAL_DEFINITIONS: VitalDefinition[] = [
   {
     id: "heart-rate",
     type: "hr",
+    metricId: "hr_resting",
     label: "Heart Rate",
     unit: "bpm",
     accent: "#3B82F6",
@@ -27,6 +32,7 @@ export const VITAL_DEFINITIONS: VitalDefinition[] = [
   {
     id: "body-temp",
     type: "bt",
+    metricId: "skin_temp",
     label: "Body Temp.",
     unit: "°C",
     accent: "#4F46E5",
@@ -35,6 +41,7 @@ export const VITAL_DEFINITIONS: VitalDefinition[] = [
   {
     id: "blood-oxygen",
     type: "bo",
+    metricId: "spo2",
     label: "Blood Oxygen",
     unit: "%",
     accent: "#4F46E5",

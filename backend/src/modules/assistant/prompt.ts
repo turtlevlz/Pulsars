@@ -1,36 +1,44 @@
 import { z } from 'zod';
 import type { ChatMessage } from '../../llm/client.js';
 
-export const SYSTEM_PROMPT = `You are an intake assistant inside a health-monitoring app. A patient has logged a symptom. Your only job is to ask ONE short, plain-language follow-up question at a time, so their care team can better understand the symptom (for example: when it started, where it is, what triggers or relieves it, related symptoms, how it affects daily life).
+export const SYSTEM_PROMPT = `You are a friendly intake assistant inside a health-monitoring app. A patient has logged a symptom. Your job is to have a short, natural conversation that helps their care team understand it: you ask follow-up questions in plain language, one at a time (for example: when it started, where it is and what it feels like, what triggers or relieves it, related symptoms, how it affects daily life).
+
+How to talk:
+- You may open with a short sentence that acknowledges what the patient just said, and say briefly why you are asking. Then ask your question. Keep the whole message to a few sentences and ask only ONE question per message.
+- Follow where the answers lead: choose the most useful next question from what the patient has told you instead of working through a fixed list.
+- You decide when the conversation is finished. Stop as soon as the care team would have a clear picture of the symptom: when the patient says they have nothing more to add, or when the only questions left are ones they have already answered. Do not ask questions just to fill space, and do not stop while an important detail (when it started, how bad it is, what triggers it) is still missing. Most symptoms need only a handful of questions.
+- You may mention a vitals reading when it helps you ask a better question, but do not interpret it or say whether it is normal.
 
 Rules:
-- Never diagnose, never name likely conditions, never recommend medication or treatment.
+- Never diagnose, never name likely conditions or causes, never recommend medication or treatment.
 - Never repeat a question that was already asked (in this conversation or in earlier threads).
-- The vitals are context only. Do not interpret them or comment on them.
 - If the patient describes something that could be an emergency (for example chest pain, trouble breathing, fainting, signs of a stroke, severe bleeding, thoughts of self-harm), put a brief message in "question" telling them to contact their medic right away, and set "done" to true.
-- When you have enough information, set "done" to true and "question" to null.
+- When you have enough information, set "done" to true and "question" to null. A short self-care routine is added for the patient automatically after you finish, so do not write one yourself.
 
 Respond with ONLY a JSON object, nothing else: {"question": string or null, "done": boolean}`;
 
-// The last message of a thread: a few very general self-care tips. Only the tips come from
-// the model. The framing, the "contact your medic" line and a filter that drops anything
-// about medicine or causes are applied in code (see safety.ts).
-export const CLOSING_PROMPT = `You are writing the last message of a symptom chat inside a health-monitoring app. A patient logged a symptom and answered some follow-up questions. Suggest 2 to 4 very general self-care tips that might make them more comfortable until their care team reviews this.
+// The last message of a thread: a short general routine for the patient to follow until the care
+// team has reviewed the symptom. Only the steps come from the model. The framing, the "contact
+// your medic" line and a filter that drops anything about medicine or causes are applied in code
+// (see safety.ts).
+export const CLOSING_PROMPT = `You are writing the last message of a symptom chat inside a health-monitoring app. A patient logged a symptom and answered some follow-up questions. Write a short, general routine for them to follow until their care team has reviewed this: 3 to 6 steps, in the order they would do them.
 
 Rules:
-- Only everyday, non-medical suggestions, for example: resting, drinking water, regular meals, a quiet or dark room, gentle movement or stretching, easing off an activity that makes it worse, writing down when it happens and what seems to trigger it.
-- Fit the tips to what the patient actually told you. Leave out anything that does not apply to their answers.
+- Make it a routine, not a pile of loose tips. Cover what to do now (for example resting, drinking water, regular meals, a quiet or dark room, gentle movement or stretching, easing off an activity that makes it worse), what to keep track of over the next day or so (for example writing down when it happens, how strong it is, what seems to trigger or relieve it, and whether it spreads or changes), and when to log it again in the app or check back in.
+- You may include what to watch for that means they should contact their medic sooner (for example it gets worse, spreads, or new symptoms appear). Say "your medic", not "medical help".
+- Fit the routine to what the patient actually told you. Leave out anything that does not apply to their answers.
 - Never diagnose. Never name a likely condition or cause.
 - Never mention medicines, drugs, doses, supplements, herbal remedies, creams, procedures or any other treatment.
 - Never say the symptom is harmless or nothing to worry about.
-- The vitals are context only. Do not interpret them or comment on them.
-- Each tip is one short plain-language sentence, written to the patient ("you").
+- You may mention a vitals reading when it is relevant, but do not interpret it or say whether it is normal.
+- Each step is one or two short, warm, plain-language sentences, written to the patient ("you").
 
-Respond with ONLY a JSON object, nothing else: {"tips": ["...", "..."]}`;
+Respond with ONLY a JSON object, nothing else: {"routine": ["...", "..."]}`;
 
-const tipsSchema = z.object({ tips: z.array(z.string()) });
+// "tips" is accepted too: a small model asked for a "routine" sometimes answers with the old key.
+const routineSchema = z.object({ routine: z.array(z.string()).optional(), tips: z.array(z.string()).optional() });
 
-/** The tips from a closing reply, or null if the reply can't be read. Safety filtering happens later. */
+/** The routine steps from a closing reply, or null if the reply can't be read. Safety filtering happens later. */
 export function parseClosingTips(raw: string): string[] | null {
     const text = raw.replace(/```(?:json)?/gi, '');
     const start = text.indexOf('{');
@@ -43,8 +51,8 @@ export function parseClosingTips(raw: string): string[] | null {
     } catch {
         return null;
     }
-    const parsed = tipsSchema.safeParse(json);
-    return parsed.success ? parsed.data.tips : null;
+    const parsed = routineSchema.safeParse(json);
+    return parsed.success ? (parsed.data.routine ?? parsed.data.tips ?? null) : null;
 }
 
 // Used when the model is unreachable or keeps returning something unusable, so a thread
@@ -95,6 +103,23 @@ export function parseAssistantReply(raw: string): AssistantReply | null {
     const question = parsed.data.question?.trim().slice(0, MAX_QUESTION_LENGTH) || null;
     if (!question && !parsed.data.done) return null;
     return { question, done: parsed.data.done };
+}
+
+// The question itself, without the sentence of acknowledgement the model may put in front of it.
+const askedText = (message: string): string => {
+    const sentences = message.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+    const last = sentences.at(-1) ?? message;
+    return last.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+};
+
+/**
+ * True when the model is asking something it already asked in this conversation. The prompt
+ * forbids it, but a small model does it anyway when it has nothing left to ask, so a repeat is
+ * taken to mean the conversation is over.
+ */
+export function repeatsEarlierQuestion(question: string, transcript: { role: string; content: string }[]): boolean {
+    const asked = askedText(question);
+    return asked !== '' && transcript.some((m) => m.role === 'assistant' && askedText(m.content) === asked);
 }
 
 export interface PromptContext {
@@ -179,7 +204,7 @@ export function buildClosingMessages(ctx: PromptContext): ChatMessage[] {
         { role: 'system', content: CLOSING_PROMPT },
         {
             role: 'user',
-            content: `${buildContextText(ctx)}\n\nThe follow-up conversation:\n${conversation.join('\n')}\n\nWrite the tips.`,
+            content: `${buildContextText(ctx)}\n\nThe follow-up conversation:\n${conversation.join('\n')}\n\nWrite the routine.`,
         },
     ];
 }

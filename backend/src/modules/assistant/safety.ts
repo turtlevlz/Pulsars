@@ -64,7 +64,7 @@ export function detectEmergency(...texts: (string | null | undefined)[]): boolea
 
 // ---------------------------------------------------------------- closing guidance
 
-// A tip is dropped if it mentions medicine or treatment, names a cause, or reassures.
+// A routine step is dropped if it mentions medicine or treatment, names a cause, or reassures.
 // The prompt already asks the model not to; this is the backstop for when it does anyway.
 const FORBIDDEN_TIP = new RegExp(
     [
@@ -78,15 +78,15 @@ const FORBIDDEN_TIP = new RegExp(
     'i',
 );
 
-const MAX_TIPS = 4;
-const MAX_TIP_LENGTH = 240;
+const MAX_TIPS = 6;
+const MAX_TIP_LENGTH = 300;
 
-/** Cleans up the model's tips and separates the ones that are safe to show from the rest. */
+/** Cleans up the model's routine steps and separates the ones that are safe to show from the rest. */
 export function filterTips(tips: string[]): { kept: string[]; dropped: string[] } {
     const kept: string[] = [];
     const dropped: string[] = [];
     for (const raw of tips) {
-        const tip = raw.replace(/^[\s\-*•\d.)]+/, '').replace(/\s+/g, ' ').trim();
+        const tip = raw.replace(/^\s*(?:(?:[-*•]|\d+[.)])\s+)+/, '').replace(/\s+/g, ' ').trim();
         if (!tip) continue;
         if (tip.length > MAX_TIP_LENGTH || FORBIDDEN_TIP.test(tip)) {
             dropped.push(tip);
@@ -102,14 +102,15 @@ export function filterTips(tips: string[]): { kept: string[]; dropped: string[] 
 /**
  * The last message of a thread. The framing and the "contact your medic" line are fixed
  * text, not written by the model, so they are always there whatever the model produced.
+ * The steps are numbered because they are a routine, in order.
  */
 export function composeClosingNote(tips: string[]): string {
     if (tips.length === 0) {
         return 'Thanks, your answers are saved and your care team will review them. If it gets worse, please contact your medic.';
     }
     return [
-        'Thanks, your answers are saved for your care team. Some general things that may help in the meantime:',
-        ...tips.map((tip) => `- ${tip}`),
+        'Thanks, your answers are saved for your care team. Here is a simple routine to follow in the meantime:',
+        ...tips.map((tip, i) => `${i + 1}. ${tip}`),
         '',
         "This is general guidance, not medical advice. If it gets worse or doesn't improve, please contact your medic.",
     ].join('\n');

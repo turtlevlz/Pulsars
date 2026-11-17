@@ -1,4 +1,3 @@
-import { config } from '../../config.js';
 import { prisma } from '../../db.js';
 import { llm } from '../../llm/client.js';
 import { HttpError } from '../../middleware/errors.js';
@@ -8,15 +7,21 @@ import { VITALS, VITAL_TYPES } from '../vitals/types.js';
 import {
     buildClosingMessages,
     buildMessages,
+    FALLBACK_QUESTIONS,
     fallbackQuestion,
     parseAssistantReply,
     parseClosingTips,
+    repeatsEarlierQuestion,
     type PromptContext,
 } from './prompt.js';
 import { EMERGENCY_MESSAGE, composeClosingNote, detectEmergency, filterTips } from './safety.js';
 import type { UserThreadsQuery } from './schemas.js';
 
 const LLM_ATTEMPTS = 2; // a second try only happens when the reply could not be parsed
+
+// The model decides when a thread is finished. This is only a backstop for a model that never
+// says it is done, so a thread cannot go on forever.
+export const MAX_ASSISTANT_QUESTIONS = 20;
 
 // Opening questions are generated after the HTTP response is sent (local models can be
 // slow). Tracking them lets shutdown and tests wait for in-flight work.
@@ -91,7 +96,8 @@ interface Turn {
 /**
  * Asks the model for the next turn. Never throws for model problems: if the model is
  * unreachable, times out, or keeps returning unusable output, a generic fallback question
- * is used so the thread can still progress (the failure is logged).
+ * is used so the thread can still progress (the failure is logged). Once every generic
+ * question has been asked the thread is finished instead of repeating them.
  * `requireQuestion` is for the opening turn, which must produce a question.
  */
 async function generateTurn(threadId: number, requireQuestion: boolean): Promise<Turn> {
@@ -107,15 +113,22 @@ async function generateTurn(threadId: number, requireQuestion: boolean): Promise
             break;
         }
         const reply = parseAssistantReply(raw);
-        if (reply && !(requireQuestion && !reply.question)) return reply;
+        if (reply && !(requireQuestion && !reply.question)) {
+            if (!requireQuestion && !reply.done && reply.question && repeatsEarlierQuestion(reply.question, ctx.transcript)) {
+                console.warn('[assistant] the model repeated a question, so the thread is finished');
+                return { question: null, done: true };
+            }
+            return reply;
+        }
         console.warn(`[assistant] unusable model reply (attempt ${attempt}/${LLM_ATTEMPTS}): ${raw.slice(0, 120)}`);
     }
+    if (assistantCount >= FALLBACK_QUESTIONS.length) return { question: null, done: true };
     return { question: fallbackQuestion(assistantCount), done: false };
 }
 
 /**
- * The last message of a thread, with a few very general self-care tips written by the model.
- * Never throws for model problems: without usable tips the thread still ends with a plain
+ * The last message of a thread, with a short general routine written by the model.
+ * Never throws for model problems: without usable steps the thread still ends with a plain
  * closing line. Whatever the model writes is filtered, and the framing is fixed text (safety.ts).
  */
 async function generateClosingNote(threadId: number): Promise<string> {
@@ -127,7 +140,7 @@ async function generateClosingNote(threadId: number): Promise<string> {
         try {
             raw = await llm.chat(messages);
         } catch (err) {
-            console.warn(`[assistant] closing tips failed, closing without them: ${err instanceof Error ? err.message : err}`);
+            console.warn(`[assistant] closing routine failed, closing without it: ${err instanceof Error ? err.message : err}`);
             break;
         }
         const tips = parseClosingTips(raw);
@@ -232,7 +245,7 @@ export async function listUserThreads(userId: number, { from, to, limit, offset 
 // ---------------------------------------------------------------- answering
 
 export interface AnswerResult {
-    // The next question. With done=true it is the closing message (self-care tips, or an
+    // The next question. With done=true it is the closing message (a self-care routine, or an
     // urgent-care notice) that expects no answer.
     nextQuestion: string | null;
     done: boolean;
@@ -273,7 +286,7 @@ export async function submitAnswer(threadId: number, answer: string): Promise<An
         return { nextQuestion: note, done: true };
     };
 
-    if (assistantCount >= config.ASSISTANT_MAX_QUESTIONS) return endWithClosingNote();
+    if (assistantCount >= MAX_ASSISTANT_QUESTIONS) return endWithClosingNote();
 
     const turn = await generateTurn(threadId, false);
     if (turn.done && !turn.question) return endWithClosingNote(); // the model has what it needs

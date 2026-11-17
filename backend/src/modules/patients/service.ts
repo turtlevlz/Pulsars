@@ -1,5 +1,5 @@
 import { prisma } from '../../db.js';
-import { countOpenAlerts } from '../alerts/service.js';
+import { openAlertSummary } from '../alerts/service.js';
 import { getLatest } from '../vitals/service.js';
 
 const SEARCH_LIMIT = 20;
@@ -20,7 +20,7 @@ export function searchPatients(q: string) {
 
 /**
  * The medic's patients (everyone they have assigned a check-up to) with what the roster needs:
- * when the last reading arrived and how many alerts nobody has acknowledged yet.
+ * when the last reading arrived, how many alerts nobody has acknowledged yet and how bad the worst is.
  */
 export async function overview(medicId: number) {
     const patients = await prisma.user.findMany({
@@ -32,10 +32,13 @@ export async function overview(medicId: number) {
         patients.map(async (patient) => {
             const latest = Object.values(await getLatest(patient.id));
             const times = latest.flatMap((l) => (l ? [l.recordedAt.getTime()] : []));
+            const alerts = await openAlertSummary(patient.id);
             return {
                 ...patient,
                 lastReadingAt: times.length > 0 ? new Date(Math.max(...times)) : null,
-                openAlerts: await countOpenAlerts(patient.id),
+                openAlerts: alerts.count,
+                /** The worst level among the open alerts, for the roster chip. */
+                openAlertLevel: alerts.topLevel,
             };
         }),
     );

@@ -1,56 +1,62 @@
-import { breaches, type Threshold } from '../vitals/thresholds.js';
-import type { Bucket } from '../vitals/buckets.js';
+import { MINUTE, type AlertItem } from '../metrics/types.js';
+import type { Step } from '../metrics/service.js';
 
-// How alerts are worked out. Readings are first averaged into one-minute buckets, and a bucket
-// counts as a breach when its *average* is past the limit, so one jumpy reading (a moved
-// finger, a poor contact) can't raise an alert. An episode is a run of back-to-back breaching
-// minutes, and only runs of at least MIN_MINUTES count. A minute with no readings ends a run:
-// nothing is assumed about time the cuff was not on.
-export const BUCKET_SECONDS = 60;
-export const MIN_MINUTES = 2;
+// How alerts are made (spec section 6). The engine judges every few minutes (a "step"); an
+// alert is a stretch of steps where one rule was yellow or red.
+//  - Persistence is already in the evaluators (30 resting minutes, three SpO2 minutes, ...), so
+//    an alert starts at the first step where the tier was reached, not at the first odd reading.
+//  - Grouping: a short dip back to green or gray (up to MERGE_GAP_MINUTES) does not split it, and
+//    a yellow that later turns red is one alert whose level is raised. That is what keeps one
+//    illness from being ten alerts.
+//  - One recommended action per alert: the one that belongs to the worst level it reached.
+export const STEP_MINUTES = 5;
+export const MERGE_GAP_MINUTES = 15;
 
-export interface Episode {
-    /** Start of the first breaching minute; with the patient and vital type it identifies the episode. */
+export interface Episode extends AlertItem {
+    /** First step at yellow or red; with the patient and rule it identifies the alert. */
     startedAt: Date;
-    /** End of the last breaching minute so far. */
+    /** End of the last step in it. */
     endedAt: Date;
     durationMinutes: number;
-    /** The worst minute average in the episode (highest for an upper limit, lowest for a lower one). */
-    peak: number;
-    /** True while the latest breaching minute is still recent, so the episode may still be growing. */
+    /** True while the latest step is still in it, so the alert may still be growing. */
     ongoing: boolean;
 }
 
-export function findEpisodes(buckets: Bucket[], threshold: Threshold, now = new Date()): Episode[] {
-    const step = BUCKET_SECONDS * 1000;
-    const episodes: Episode[] = [];
-    let run: Bucket[] = [];
+export function groupEpisodes(steps: Step[], stepMinutes = STEP_MINUTES, mergeGapMinutes = MERGE_GAP_MINUTES): Episode[] {
+    const stepMs = stepMinutes * MINUTE;
+    const lastStep = steps.length > 0 ? steps[steps.length - 1].t : null;
+    const open = new Map<string, { start: number; lastActive: number; item: AlertItem }>();
+    const done: Episode[] = [];
 
-    const close = () => {
-        if (run.length >= MIN_MINUTES) {
-            const values = run.map((b) => b.avg);
-            const last = run[run.length - 1].t.getTime() + step;
-            episodes.push({
-                startedAt: run[0].t,
-                endedAt: new Date(last),
-                durationMinutes: run.length,
-                peak: threshold.bound === 'upper' ? Math.max(...values) : Math.min(...values),
-                // the minute that just ended or is still filling in counts as "now"
-                ongoing: now.getTime() - last < 2 * step,
-            });
-        }
-        run = [];
+    const close = (ruleId: string) => {
+        const e = open.get(ruleId)!;
+        open.delete(ruleId);
+        const endedAt = e.lastActive + stepMs;
+        done.push({
+            ...e.item,
+            startedAt: new Date(e.start),
+            endedAt: new Date(endedAt),
+            durationMinutes: Math.round((endedAt - e.start) / MINUTE),
+            ongoing: e.lastActive === lastStep,
+        });
     };
 
-    for (const bucket of buckets) {
-        const contiguous = run.length === 0 || bucket.t.getTime() - run[run.length - 1].t.getTime() === step;
-        if (!breaches(threshold, bucket.avg)) {
-            close();
-        } else {
-            if (!contiguous) close();
-            run.push(bucket);
+    for (const step of steps) {
+        for (const item of step.items) {
+            const e = open.get(item.ruleId);
+            if (e && step.t - e.lastActive <= mergeGapMinutes * MINUTE) {
+                e.lastActive = step.t;
+                // the worst level reached is the one that is described
+                if (item.level === 'red' && e.item.level !== 'red') e.item = item;
+            } else {
+                if (e) close(item.ruleId);
+                open.set(item.ruleId, { start: step.t, lastActive: step.t, item });
+            }
+        }
+        for (const [ruleId, e] of [...open]) {
+            if (step.t - e.lastActive > mergeGapMinutes * MINUTE) close(ruleId);
         }
     }
-    close();
-    return episodes;
+    for (const ruleId of [...open.keys()]) close(ruleId);
+    return done;
 }

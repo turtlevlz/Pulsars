@@ -93,31 +93,38 @@ describe('filterTips', () => {
         'It is probably caused by stress.',
         'This is nothing to worry about.',
         'Physical therapy could help.',
-        'x'.repeat(300),
+        'x'.repeat(400),
     ])('drops: %s', (tip) => {
         const { kept, dropped } = filterTips([tip, 'Rest for a while.']);
         expect(kept).toEqual(['Rest for a while.']);
         expect(dropped).toHaveLength(1);
     });
 
-    it('removes duplicates, empty tips and anything past four', () => {
-        const { kept } = filterTips(['Rest.', 'rest.', '', '   ', 'Drink water.', 'Stretch gently.', 'Eat regularly.', 'Go outside.']);
-        expect(kept).toEqual(['Rest.', 'Drink water.', 'Stretch gently.', 'Eat regularly.']);
+    it('removes duplicates, empty steps and anything past six', () => {
+        const { kept } = filterTips([
+            'Rest.', 'rest.', '', '   ', 'Drink water.', 'Stretch gently.', 'Eat regularly.', 'Go outside.', 'Write it down.', 'Log it again tonight.', 'Sleep early.',
+        ]);
+        expect(kept).toEqual(['Rest.', 'Drink water.', 'Stretch gently.', 'Eat regularly.', 'Go outside.', 'Write it down.']);
+    });
+
+    it('takes off list markers but keeps a number that is part of the step', () => {
+        const { kept } = filterTips(['1) rest for 10 minutes', '- 2 glasses of water', '3. Log it again in 2 hours']);
+        expect(kept).toEqual(['Rest for 10 minutes.', '2 glasses of water.', 'Log it again in 2 hours.']);
     });
 });
 
 describe('composeClosingNote', () => {
-    it('lists the tips between fixed text that always sends the patient to their medic if it gets worse', () => {
+    it('numbers the steps between fixed text that always sends the patient to their medic if it gets worse', () => {
         const note = composeClosingNote(['Rest for a while.', 'Drink some water.']);
-        expect(note).toContain('\n- Rest for a while.\n- Drink some water.\n');
+        expect(note).toContain('\n1. Rest for a while.\n2. Drink some water.\n');
         expect(note).toMatch(/not medical advice/i);
         expect(note).toMatch(/contact your medic/i);
     });
 
-    it('still closes politely when there are no tips', () => {
+    it('still closes politely when there are no steps', () => {
         const note = composeClosingNote([]);
         expect(note).toMatch(/care team will review/i);
         expect(note).toMatch(/contact your medic/i);
-        expect(note).not.toContain('- ');
+        expect(note).not.toMatch(/^\d+\. /m);
     });
 });

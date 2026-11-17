@@ -227,7 +227,8 @@ describe('GET /users/:id/vitals/trend', () => {
         const week = await api(u).get(`/users/${u.id}/vitals/trend?type=bt&from=${day(7)}&to=${day(0)}&points=60`);
         expect(week.body.bucketSeconds).toBeGreaterThan(60);
         expect(week.body.bucketSeconds % 60).toBe(0);
-        expect(week.body.threshold).toEqual({ bound: 'upper', limit: 37.8 });
+        // a wrist skin temperature has no single absolute limit: the chart compares with the person's own curve
+        expect(week.body.threshold).toBeNull();
         expect(week.body.points).toEqual([]);
     });
 

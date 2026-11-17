@@ -32,24 +32,38 @@ export type PatientStatus = "alert" | "normal" | "nodata";
 /** Readings older than this make a patient "No data" in the list (the cuff is probably off). */
 const NO_DATA_AFTER_MS = 60 * 60_000;
 
-export function rosterStatus(p: RosterPatient, now: number): { status: PatientStatus; label: string; note: string } {
-  if (p.openAlerts > 0) return { status: "alert", label: "Alert", note: `${p.openAlerts} open` };
-  if (p.lastReadingAt === null) return { status: "nodata", label: "No data", note: "no readings yet" };
-  if (now - Date.parse(p.lastReadingAt) > NO_DATA_AFTER_MS) {
-    return { status: "nodata", label: "No data", note: `last reading ${formatAgo(now - Date.parse(p.lastReadingAt))}` };
+/** `level` is set for an open alert: the worst tier among the patient's open alerts. */
+export function rosterStatus(
+  p: RosterPatient,
+  now: number,
+): { status: PatientStatus; label: string; note: string; level: "red" | "yellow" | null } {
+  if (p.openAlerts > 0) {
+    const level = p.openAlertLevel ?? "yellow";
+    return { status: "alert", label: level === "red" ? "Red" : "Yellow", note: `${p.openAlerts} open`, level };
   }
-  return { status: "normal", label: "Normal", note: "all clear" };
+  if (p.lastReadingAt === null) return { status: "nodata", label: "No data", note: "no readings yet", level: null };
+  if (now - Date.parse(p.lastReadingAt) > NO_DATA_AFTER_MS) {
+    return {
+      status: "nodata",
+      label: "No data",
+      note: `last reading ${formatAgo(now - Date.parse(p.lastReadingAt))}`,
+      level: null,
+    };
+  }
+  // No open alert is not the same as "green": the list says only what it knows
+  return { status: "normal", label: "No alerts", note: "none open", level: null };
 }
 
 const STATUS_ORDER: Record<PatientStatus, number> = { alert: 0, normal: 1, nodata: 2 };
 
-/** Alerts first (most open first), then the rest, then patients with no recent data. */
+/** Red alerts first, then yellow (most open first), then the rest, then patients with no recent data. */
 export function sortRoster(patients: RosterPatient[], now: number): RosterPatient[] {
   return [...patients].sort((a, b) => {
     const sa = rosterStatus(a, now);
     const sb = rosterStatus(b, now);
     return (
       STATUS_ORDER[sa.status] - STATUS_ORDER[sb.status] ||
+      Number(sb.level === "red") - Number(sa.level === "red") ||
       b.openAlerts - a.openAlerts ||
       a.name.localeCompare(b.name)
     );
@@ -105,9 +119,8 @@ export const vitalAccent = (type: VitalType) => DEF[type].accent;
 
 export const formatValue = (type: VitalType, value: number) => value.toFixed(DEF[type].decimals);
 
-export const breaches = (t: Threshold, value: number) => (t.bound === "upper" ? value > t.limit : value < t.limit);
-
-export const describeLimit = (t: Threshold) => `${t.bound === "upper" ? "upper" : "lower"} limit [${t.limit}]`;
+/** What the dashed line on a chart means (it is a reference, not where an alert starts). */
+export const describeLimit = (t: Threshold) => t.label;
 
 /** How much the average has to move between the first and last third of a range to count as a trend. */
 const TREND_TOLERANCE: Record<VitalType, number> = { hr: 3, bt: 0.2, bo: 1 };
@@ -121,11 +134,6 @@ export function trendDirection(type: VitalType, points: TrendPoint[]): "rising" 
   if (Math.abs(change) < TREND_TOLERANCE[type]) return "stable";
   return change > 0 ? "rising" : "falling";
 }
-
-// ------------------------------------------------------------------ alerts
-
-const ALERT_METRIC: Record<VitalType, string> = { hr: "Heart rate", bt: "Body temp.", bo: "Blood oxygen" };
-export const alertMetric = (type: VitalType) => ALERT_METRIC[type];
 
 // ------------------------------------------------------------------ summary
 
@@ -170,15 +178,13 @@ export function summaryBullets({ summary, previous, alerts, symptoms, checkups, 
   if (bullets.length === 0) bullets.push("No readings were recorded in this period.");
 
   if (alerts.length === 0) {
-    bullets.push("No threshold alerts.");
+    bullets.push("No health alerts.");
   } else {
     const open = alerts.filter((a) => a.status === "open").length;
-    const byType = (["hr", "bt", "bo"] as const)
-      .map((t) => ({ t, n: alerts.filter((a) => a.type === t).length }))
-      .filter((x) => x.n > 0)
-      .map((x) => `${x.n} ${ALERT_METRIC[x.t].toLowerCase()}`);
+    const red = alerts.filter((a) => a.level === "red").length;
+    const titles = [...new Set(alerts.map((a) => a.title))].join(", ");
     bullets.push(
-      `${alerts.length} threshold ${alerts.length === 1 ? "alert" : "alerts"} (${byType.join(", ")}); ${open === 0 ? "all acknowledged" : `${open} still open`}.`,
+      `${alerts.length} health ${alerts.length === 1 ? "alert" : "alerts"} (${red} red, ${alerts.length - red} yellow: ${titles}); ${open === 0 ? "all acknowledged" : `${open} still open`}.`,
     );
   }
 

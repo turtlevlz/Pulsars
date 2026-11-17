@@ -64,6 +64,12 @@ function dueFields(dueAt: string | null, completed: boolean) {
   };
 }
 
+function doneLabel(completedAt: string | null) {
+  if (!completedAt) return undefined;
+  const at = new Date(completedAt);
+  return `Done ${at.getMonth() + 1}/${at.getDate()}`;
+}
+
 /**
  * The backend stores a question as free text and an answer as a string, so every
  * question becomes a text question here. (The UI also supports scale, choice and number
@@ -79,6 +85,7 @@ export function toCheckup(c: CheckupSummary | CheckupDetail): Checkup {
     ...dueFields(c.dueAt, completed),
     duration: `${count} ${count === 1 ? "question" : "questions"}`,
     completed,
+    completedLabel: completed ? doneLabel(c.completedAt) : undefined,
     // The description is free text; a line per step on the "Before you start" screen
     instructions: c.description
       ?.split("\n")

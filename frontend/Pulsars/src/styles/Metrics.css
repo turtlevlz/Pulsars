@@ -1,0 +1,478 @@
+/* ---------- Health tiers: the four colours, defined once ---------- */
+:root {
+  --tier-green: #3ecf8e;
+  --tier-green-soft: #7be3b6;
+  --tier-green-bg: rgba(62, 207, 142, 0.12);
+  --tier-yellow: #f5b942;
+  --tier-yellow-soft: #f8d08a;
+  --tier-yellow-bg: rgba(245, 185, 66, 0.12);
+  --tier-red: #ff6b81;
+  --tier-red-soft: #ffb3c0;
+  --tier-red-bg: rgba(255, 107, 129, 0.14);
+  --tier-gray: #8b8cae;
+  --tier-gray-soft: #b4b5d3;
+  --tier-gray-bg: rgba(139, 140, 174, 0.12);
+}
+
+.tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.tier--small {
+  padding: 0 9px;
+  font-size: 0.74rem;
+}
+
+.tier__glyph {
+  font-size: 0.7em;
+}
+
+.tier--green {
+  background: var(--tier-green-bg);
+  color: var(--tier-green-soft);
+}
+
+.tier--yellow {
+  background: var(--tier-yellow-bg);
+  color: var(--tier-yellow-soft);
+}
+
+.tier--red {
+  background: var(--tier-red-bg);
+  color: var(--tier-red-soft);
+}
+
+.tier--gray {
+  background: var(--tier-gray-bg);
+  color: var(--tier-gray-soft);
+}
+
+/* ---------- Evidence chip, reason and meta row ---------- */
+.evidence {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px dashed var(--surface-muted);
+  border-radius: 999px;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.tier-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.tier-note__reason {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.tier-note__action {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.tier-note__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tier-note__quality {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+}
+
+.tier-note__link {
+  margin-left: auto;
+  color: var(--accent-text);
+  font-size: 0.82rem;
+  text-decoration: underline;
+}
+
+.tier-note__link:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+/* A tile's border carries its tier too, next to the word and the shape */
+.vital-card--green,
+.metric-tile--green {
+  border: 1px solid rgba(62, 207, 142, 0.35);
+}
+
+.vital-card--yellow,
+.metric-tile--yellow {
+  border: 1px solid var(--tier-yellow);
+}
+
+.vital-card--red,
+.metric-tile--red {
+  border: 1px solid var(--tier-red);
+}
+
+.vital-card--gray,
+.metric-tile--gray {
+  border: 1px solid var(--border);
+}
+
+.metric-tile__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metric-tile__reading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 10px 0 0;
+}
+
+.metric-tile__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.metric-tile__age {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* ---------- Alert strip (dashboard) ---------- */
+.alert-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-strip__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alert-strip__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--card);
+}
+
+.alert-strip__item--yellow {
+  border-color: var(--tier-yellow);
+  background: var(--tier-yellow-bg);
+}
+
+.alert-strip__item--red {
+  border-color: var(--tier-red);
+  background: var(--tier-red-bg);
+}
+
+.alert-strip__text {
+  display: -webkit-box;
+  flex: 1;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.alert-strip__more {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.proposed-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.symptom-flag {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.symptom-flag--red {
+  color: var(--tier-red-soft);
+}
+
+/* The person's usual range, behind the trend line (medic charts) */
+.trend__band {
+  fill: var(--tier-green);
+  fill-opacity: 0.14;
+  stroke: none;
+}
+
+/* Alerts on the medic dashboard: one row each, so the sentences wrap instead of widening a table */
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alert-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.alert-row:last-child {
+  border-bottom: 0;
+}
+
+.alert-row__when {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.alert-row__body p {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.alert-row__what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 4px;
+}
+
+.alert-row__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 110px;
+  text-align: right;
+}
+
+@media (max-width: 960px) {
+  .alert-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .alert-row__side {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+}
+
+/* ---------- Health log forms ---------- */
+.log-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.healthlog__kinds {
+  flex-wrap: wrap;
+}
+
+.log-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.log-form__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.log-form__hint {
+  margin: -4px 0 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.log-form__saved {
+  margin: 0;
+  color: var(--tier-green-soft);
+  font-size: 0.9rem;
+}
+
+.check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.healthlog__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 22px;
+  align-items: stretch;
+}
+
+.healthlog__tiles > .card {
+  margin-bottom: 0;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- Metric detail ---------- */
+.metric-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.metric-detail__main,
+.metric-detail__side {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.metric-detail__main > .card,
+.metric-detail__side > .card {
+  margin-bottom: 0;
+}
+
+.metric-detail__back {
+  margin: -16px 0 0;
+}
+
+.metric-detail__reason {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.metric-detail .trend {
+  height: 220px;
+  margin-top: 14px;
+}
+
+.explain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0 0;
+}
+
+.explain dt {
+  margin-top: 8px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.explain dd {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.tier-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.tier-table__row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.sources {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.sources__link {
+  margin-left: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .metric-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

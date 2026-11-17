@@ -9,7 +9,6 @@ export default defineConfig({
         env: {
             NODE_ENV: 'test',
             DATABASE_URL: testDatabaseUrl(),
-            ASSISTANT_MAX_QUESTIONS: '4',
             JWT_SECRET: 'test-secret-test-secret-test-secret-123',
         },
         // Test files share one database, so they run one after another.

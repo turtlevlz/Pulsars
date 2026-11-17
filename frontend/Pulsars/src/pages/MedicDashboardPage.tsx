@@ -13,6 +13,7 @@ import TrendCard from "../components/medic/TrendCard";
 import { useNow } from "../hooks/useNow";
 import { usePatientDashboard } from "../hooks/usePatientDashboard";
 import { useRoster } from "../hooks/useRoster";
+import { SENSOR_METRIC } from "../lib/metrics";
 import { rangeById, sortRoster, summaryBullets, trendsToCsv } from "../lib/medic";
 import type { RangeId } from "../lib/medic";
 import "../styles/Pulsars.css";
@@ -118,7 +119,7 @@ export default function MedicDashboardPage() {
               <section className="card medic-empty">
                 <h2 className="card__title card__title--lg">You aren't following {current.name} yet</h2>
                 <p>
-                  Assign a checkup to start following this patient. Their vitals, threshold alerts, symptom log and
+                  Assign a checkup to start following this patient. Their vitals, health alerts, symptom log and
                   follow-up threads will appear here once you do.
                 </p>
               </section>
@@ -144,6 +145,7 @@ export default function MedicDashboardPage() {
                       rangePhrase={rangeInfo.phrase}
                       rangeAgo={rangeInfo.ago}
                       now={now}
+                      status={data.health.metrics.find((m) => m.metricId === SENSOR_METRIC[type]) ?? null}
                     />
                   ))}
                 </div>

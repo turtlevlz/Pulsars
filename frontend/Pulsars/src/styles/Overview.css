@@ -1,0 +1,338 @@
+/* ---------- Dashboard cards that fill their height ----------
+   The dashboard is one window tall, so the panel cards are as tall as the window leaves room
+   for: it varies from one screen to the next. Instead of guessing a height, each card ends in an
+   "elastic" region that takes whatever is left over and hides itself when that is too little to
+   be useful. The regions are size containers, so a container query can do the hiding without
+   any script. They are only used on the dashboard, where the card height is set by the grid.
+
+   Selectors have two classes so they win over the single-class rules in Pulsars.css whatever
+   order the stylesheets load in. */
+
+/* ----- Checkups (variant="overview") ----- */
+.checkups--overview .checkups__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.checkups--overview .checkups__count {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Bulma's .progress:not(:last-child) adds a 24px bottom margin, hence the extra class */
+.checkups--overview .progress.checkups__progress {
+  flex: none;
+  height: 6px;
+  margin: 10px 0 0;
+}
+
+/* The to-do rows keep their natural height; the Completed section below takes the rest */
+.checkups--overview .checkups__list {
+  flex: 0 1 auto;
+  margin-top: 12px;
+}
+
+.checkup__summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+/* The card itself is a size container too, so rows can drop their description line when the
+   card is too short for three of them. (Only above the width where the panels stack, because
+   there the card's height comes from its content, which size containment would ignore.) */
+@media (min-width: 761px) {
+  .checkups--overview {
+    container-type: size;
+  }
+
+  @container (max-height: 399px) {
+    .checkup__summary {
+      display: none;
+    }
+  }
+}
+
+/* Nothing assigned (or still loading): the message fills the card instead of leaving it empty */
+.checkups--overview .checkups__empty--fill {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.checkups--overview .checkups__clear {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: rgba(79, 70, 229, 0.08);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.checkups--overview .checkups__clear svg {
+  flex: none;
+  color: var(--accent-text);
+}
+
+/* The elastic region */
+.checkups--overview .checkups__done {
+  flex: 1 1 0;
+  min-height: 0;
+  container-type: size;
+}
+
+.checkups__done-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+  padding-top: 10px;
+}
+
+/* Short: just the heading and a one-line message. Shorter still: nothing. */
+@container (max-height: 63px) {
+  .checkups__done-body {
+    display: none;
+  }
+}
+
+@container (max-height: 139px) {
+  .checkups__done-empty svg,
+  .checkups__done-hint {
+    display: none;
+  }
+}
+
+.checkups__subtitle {
+  flex: none;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Whole rows only: one that doesn't fit wraps into a second column, which is clipped. */
+.checkups__done-list {
+  display: flex;
+  flex: 1;
+  flex-flow: column wrap;
+  align-content: flex-start;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.checkups__done-item {
+  display: flex;
+  flex: none;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.checkups__done-item svg {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.checkups__done-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkups__done-date {
+  flex: none;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.checkups__done-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-inner);
+  background: radial-gradient(ellipse at 50% 40%, rgba(79, 70, 229, 0.1), transparent 70%);
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  text-align: center;
+  overflow: hidden;
+}
+
+.checkups__done-empty svg {
+  flex: none;
+  margin-bottom: 4px;
+  color: var(--surface-muted);
+}
+
+.checkups__done-hint {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.checkups--overview .checkups__more {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 12px;
+  color: var(--accent-text);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.checkups--overview .checkups__more:hover {
+  text-decoration: underline;
+}
+
+.checkups--overview .checkups__more:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+/* ----- Log a symptom: recent entries under the form ----- */
+/* With the strip present the form is only as tall as it needs to be (it used to stretch), so
+   the strip gets the leftover height. When the window is short the form still gives up height
+   exactly as before. */
+.symptom-log:has(.symptom-log__recent) .symptom-log__form {
+  flex: 0 1 auto;
+}
+
+.symptom-log__recent {
+  flex: 1 1 0;
+  min-height: 0;
+  container-type: size;
+}
+
+.recent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  padding-top: 14px;
+}
+
+/* The heading plus at least one row; otherwise nothing */
+@container (max-height: 89px) {
+  .recent {
+    display: none;
+  }
+}
+
+.recent__head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recent__title {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.recent__more {
+  color: var(--accent-text);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.recent__more:hover {
+  text-decoration: underline;
+}
+
+.recent__more:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+/* Whole rows only: one that doesn't fit wraps into a second column, which is clipped.
+   "View all" is the way to the rest. */
+.recent__list {
+  display: flex;
+  flex: 1;
+  flex-flow: column wrap;
+  align-content: flex-start;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.recent__item {
+  display: flex;
+  flex: none;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+}
+
+.recent__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent__meter {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+
+.recent__date {
+  flex: none;
+  min-width: 7.5em;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.recent__empty {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}

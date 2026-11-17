@@ -1,7 +1,9 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { errorMessage } from "../api/client";
+import type { PicklistSymptom } from "../api/metrics";
 import type { Frequency } from "../api/symptoms";
+import "../styles/Metrics.css";
 
 export type SymptomEntry = {
   symptom: string;
@@ -13,7 +15,12 @@ export type SymptomEntry = {
 type SymptomLogProps = {
   /** May be async. If it throws, the message is shown and the form keeps its values. */
   onSave?: (entry: SymptomEntry) => void | Promise<void>;
-  symptoms?: string[];
+  /** The symptom picklist from the backend's metrics config (labels, red flags, hints). */
+  picklist?: PicklistSymptom[];
+  /** Who to tell about a red-flag symptom. */
+  escalateTo?: string;
+  /** Shown under the form, e.g. <RecentSymptoms />, which uses up any height the form leaves. */
+  footer?: ReactNode;
 };
 
 const FREQUENCY_OPTIONS: { value: Frequency; label: string }[] = [
@@ -24,24 +31,30 @@ const FREQUENCY_OPTIONS: { value: Frequency; label: string }[] = [
   { value: "constant", label: "Constantly" },
 ];
 
-const DEFAULT_SYMPTOMS = [
+// Used until the config arrives (or if it cannot be reached); the backend knows these by name too.
+const FALLBACK_PICKLIST: PicklistSymptom[] = [
   "Headache",
-  "Fatigue",
   "Dizziness",
-  "Nausea",
+  "Nausea / motion sickness",
   "Shortness of breath",
-  "Chest discomfort",
-  "Fever",
+  "Chest pain",
+  "Fatigue",
   "Other",
-];
+].map((label) => ({ id: label, label, red_flag: label === "Chest pain" }));
 
 const SEVERITY_LEVELS = [1, 2, 3, 4, 5];
 
 export default function SymptomLog({
   onSave,
-  symptoms = DEFAULT_SYMPTOMS,
+  picklist,
+  escalateTo = "crew medical officer",
+  footer,
 }: SymptomLogProps) {
-  const [symptom, setSymptom] = useState(symptoms[0]);
+  const options = picklist && picklist.length > 0 ? picklist : FALLBACK_PICKLIST;
+  const [chosen, setSymptom] = useState(options[0].label);
+  // The list can arrive after the form is drawn: never keep a choice that is not in it
+  const chosenOption = options.find((o) => o.label === chosen) ?? options[0];
+  const symptom = chosenOption.label;
   const [severity, setSeverity] = useState(2);
   const [frequency, setFrequency] = useState<Frequency>("once");
   const [notes, setNotes] = useState("");
@@ -78,12 +91,18 @@ export default function SymptomLog({
             value={symptom}
             onChange={(e) => setSymptom(e.target.value)}
           >
-            {symptoms.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {options.map(({ id, label }) => (
+              <option key={id} value={label}>
+                {label}
               </option>
             ))}
           </select>
+          {chosenOption.red_flag && (
+            <span className="symptom-flag symptom-flag--red" role="note">
+              Red flag. Tell the {escalateTo} now; do not wait for the follow-up questions.
+            </span>
+          )}
+          {chosenOption.hint && <span className="symptom-flag">{chosenOption.hint}</span>}
         </label>
 
         <div className="field" role="group" aria-labelledby="severity-label">
@@ -145,6 +164,8 @@ export default function SymptomLog({
           {saving ? "Saving..." : "Save to symptom log"}
         </button>
       </form>
+
+      {footer}
     </section>
   );
 }

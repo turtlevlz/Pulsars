@@ -3,9 +3,14 @@ import Checkups from "../components/Checkups";
 import CheckupModal from "../components/CheckupModal";
 import SymptomLog from "../components/SymptomLog";
 import type { SymptomEntry } from "../components/SymptomLog";
+import RecentSymptoms from "../components/RecentSymptoms";
 import HealthAssistant from "../components/HealthAssistant";
+import AlertStrip from "../components/metrics/AlertStrip";
 import { useAssistant } from "../hooks/useAssistant";
 import { useCheckups } from "../hooks/useCheckups";
+import { useMetricStatus } from "../hooks/useMetricStatus";
+import { useMetricsConfig } from "../hooks/useMetricsConfig";
+import { useRecentSymptoms } from "../hooks/useRecentSymptoms";
 import { useVitals } from "../hooks/useVitals";
 import { createSymptom } from "../api/symptoms";
 import { VITAL_DEFINITIONS } from "../lib/vitals";
@@ -23,8 +28,11 @@ export default function DashboardPage() {
   } = useCheckups();
   const vitals = useVitals();
   const assistant = useAssistant();
+  const health = useMetricStatus();
+  const { config } = useMetricsConfig();
+  const recentSymptoms = useRecentSymptoms();
 
-  const vitalCards = VITAL_DEFINITIONS.map(({ id, type, decimals, ...definition }) => {
+  const vitalCards = VITAL_DEFINITIONS.map(({ id, type, metricId, decimals, ...definition }) => {
     const readings = vitals.series[type] ?? [];
     const latest = readings.at(-1);
 
@@ -38,12 +46,16 @@ export default function DashboardPage() {
       loading: vitals.loading,
       trend: readings.map((r) => r.value),
       trendTimes: readings.map((r) => Date.parse(r.recordedAt)),
+      // null while the tiers load, so the card shows "Checking..." instead of a wrong colour
+      status: health.status?.metrics.find((m) => m.metricId === metricId) ?? null,
+      detailsTo: `/metrics/${metricId}`,
     };
   });
 
   // Saving a symptom opens a follow-up thread on the server; the assistant picks it up
   const handleSaveSymptom = async (entry: SymptomEntry) => {
     const created = await createSymptom(entry);
+    recentSymptoms.add(created);
     assistant.follow(created.threadId);
   };
 
@@ -58,7 +70,7 @@ export default function DashboardPage() {
           ? "Waiting for the assistant..."
           : "Type your answer...";
 
-  const problem = vitals.error ?? checkupsError;
+  const problem = vitals.error ?? checkupsError ?? health.error;
 
   return (
     <main className="pulsars">
@@ -70,6 +82,8 @@ export default function DashboardPage() {
 
       <div className="dashboard">
         <div className="dashboard__main">
+          {health.status && <AlertStrip alerts={health.status.alerts} />}
+
           <div className="dashboard__vitals">
             {vitalCards.map(({ id, ...vital }) => (
               <VitalCard key={id} {...vital} />
@@ -78,6 +92,8 @@ export default function DashboardPage() {
 
           <div className="dashboard__panels">
             <Checkups
+              variant="overview"
+              viewAllTo="/checkups"
               checkups={checkups}
               onStart={startCheckup}
               emptyMessage={
@@ -86,7 +102,17 @@ export default function DashboardPage() {
                   : "No checkups assigned to you yet."
               }
             />
-            <SymptomLog onSave={handleSaveSymptom} />
+            <SymptomLog
+              onSave={handleSaveSymptom}
+              picklist={config?.symptoms}
+              escalateTo={config?.escalate_to}
+              footer={
+                <RecentSymptoms
+                  records={recentSymptoms.records}
+                  loading={recentSymptoms.loading}
+                />
+              }
+            />
           </div>
         </div>
 

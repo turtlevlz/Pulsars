@@ -6,9 +6,11 @@ import SymptomHistory from "../components/SymptomHistory";
 import type { SymptomRecord } from "../components/SymptomHistory";
 import { errorMessage } from "../api/client";
 import { createSymptom, listSymptoms, symptomToRecord } from "../api/symptoms";
+import { useMetricsConfig } from "../hooks/useMetricsConfig";
 import "../styles/Pulsars.css";
 
 export default function SymptomLogPage() {
+  const { config } = useMetricsConfig();
   const [records, setRecords] = useState<SymptomRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,11 @@ export default function SymptomLogPage() {
       )}
 
       <div className="split split--equal">
-        <SymptomLog onSave={handleSave} />
+        <SymptomLog
+          onSave={handleSave}
+          picklist={config?.symptoms}
+          escalateTo={config?.escalate_to}
+        />
         <SymptomHistory
           records={records}
           emptyMessage={loading ? "Loading..." : "No symptoms logged yet."}

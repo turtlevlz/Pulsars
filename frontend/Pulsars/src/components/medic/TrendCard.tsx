@@ -1,7 +1,7 @@
 import type { Latest, Trend } from "../../api/medic";
+import type { MetricStatus } from "../../api/metrics";
 import type { VitalType } from "../../api/vitals";
 import {
-  breaches,
   describeLimit,
   formatAgo,
   formatValue,
@@ -9,6 +9,7 @@ import {
   vitalAccent,
   vitalLabel,
 } from "../../lib/medic";
+import TierNote from "../metrics/TierNote";
 import TrendChart from "./TrendChart";
 
 type TrendCardProps = {
@@ -20,21 +21,17 @@ type TrendCardProps = {
   /** Label for the left end of the time axis, e.g. "7 d ago". */
   rangeAgo: string;
   now: number;
+  /** The tier of the metric this vital feeds; null while it loads. */
+  status: MetricStatus | null;
 };
 
-/** A reading older than this is history, not something to flag as "past the limit" right now. */
-const RECENT_MS = 15 * 60_000;
-
-export default function TrendCard({ type, trend, latest, rangePhrase, rangeAgo, now }: TrendCardProps) {
+export default function TrendCard({ type, trend, latest, rangePhrase, rangeAgo, now, status }: TrendCardProps) {
   const direction = trendDirection(type, trend.points);
-  const over =
-    latest !== null && now - Date.parse(latest.recordedAt) <= RECENT_MS && breaches(trend.threshold, latest.value);
 
   return (
-    <article className={`card vital-card medic-vital${over ? " medic-vital--over" : ""}`}>
+    <article className={`card vital-card medic-vital vital-card--${status?.level ?? "gray"}`}>
       <header className="vital-card__header">
         <h3 className="card__title">{vitalLabel(type)}</h3>
-        {over && <span className="chip chip--alert">Past limit</span>}
       </header>
 
       <p className="vital-card__reading">
@@ -51,8 +48,10 @@ export default function TrendCard({ type, trend, latest, rangePhrase, rangeAgo, 
         to={Date.parse(trend.to)}
         bucketMs={trend.bucketSeconds * 1000}
         threshold={trend.threshold}
+        baseline={trend.baseline}
         color={vitalAccent(type)}
         label={`${vitalLabel(type)} over the ${rangePhrase}`}
+        formatValue={(value) => formatValue(type, value)}
       />
 
       <div className="trend__axis" aria-hidden="true">
@@ -60,12 +59,25 @@ export default function TrendCard({ type, trend, latest, rangePhrase, rangeAgo, 
         <span>now</span>
       </div>
 
-      <div className="medic-vital__notes">
-        <p className="medic-vital__note">Dashed line: {describeLimit(trend.threshold)}</p>
-        <p className="medic-vital__note">
+      <TierNote status={status} withBadge />
+
+      <ul className="trend__legend">
+        {trend.threshold && (
+          <li>
+            <span className="trend__swatch trend__swatch--limit" aria-hidden="true" />
+            {describeLimit(trend.threshold)}
+          </li>
+        )}
+        {trend.baseline && (
+          <li>
+            <span className="trend__swatch trend__swatch--band" aria-hidden="true" />
+            This person's usual range
+          </li>
+        )}
+        <li>
           Trend over the {rangePhrase}: {direction ?? "not enough data"}
-        </p>
-      </div>
+        </li>
+      </ul>
     </article>
   );
 }

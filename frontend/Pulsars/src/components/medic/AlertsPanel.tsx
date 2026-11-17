@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { errorMessage } from "../../api/client";
 import type { Alert } from "../../api/medic";
-import { alertMetric, formatDuration, formatValue, formatWhen } from "../../lib/medic";
+import { formatDuration, formatWhen } from "../../lib/medic";
+import EvidenceChip from "../metrics/EvidenceChip";
+import TierBadge from "../metrics/TierBadge";
 
 type AlertsPanelProps = {
   alerts: Alert[];
@@ -10,7 +12,7 @@ type AlertsPanelProps = {
   onAcknowledge: (alert: Alert) => Promise<void>;
 };
 
-const keyOf = (a: Alert) => `${a.type}|${a.startedAt}`;
+const keyOf = (a: Alert) => `${a.ruleId}|${a.startedAt}`;
 
 export default function AlertsPanel({ alerts, now, onAcknowledge }: AlertsPanelProps) {
   const [filter, setFilter] = useState<"open" | "all">("open");
@@ -36,7 +38,7 @@ export default function AlertsPanel({ alerts, now, onAcknowledge }: AlertsPanelP
     <section className="card medic-alerts" aria-labelledby="alerts-title">
       <header className="medic-panel__head">
         <h2 id="alerts-title" className="card__title card__title--lg">
-          Threshold alerts
+          Health alerts
         </h2>
         <div className="segmented" role="group" aria-label="Which alerts to show">
           <button
@@ -66,68 +68,57 @@ export default function AlertsPanel({ alerts, now, onAcknowledge }: AlertsPanelP
 
       {shown.length === 0 ? (
         <p className="history__empty">
-          {filter === "open" ? "No open alerts." : "No threshold alerts in this range."}
+          {filter === "open" ? "No open alerts." : "No health alerts in this range."}
         </p>
       ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Metric</th>
-                <th scope="col">Value</th>
-                <th scope="col">Limit</th>
-                <th scope="col">Duration</th>
-                <th scope="col">Status</th>
-                <th scope="col">
-                  <span className="visually-hidden">Action</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((a) => (
-                <tr key={keyOf(a)}>
-                  <td>{formatWhen(a.startedAt, now)}</td>
-                  <td>{alertMetric(a.type)}</td>
-                  <td>
-                    <strong>
-                      {formatValue(a.type, a.peak)} {a.unit}
-                    </strong>
-                  </td>
-                  <td>
-                    {a.threshold.bound === "upper" ? "above" : "below"} {a.threshold.limit}
-                  </td>
-                  <td>
-                    {formatDuration(a.durationMinutes)}
-                    {a.ongoing && <span className="data-table__soft"> ongoing</span>}
-                  </td>
-                  <td>
-                    <span className={`chip ${a.status === "open" ? "chip--alert" : "chip--quiet"}`}>
-                      {a.status === "open" ? "Open" : "Acknowledged"}
-                    </span>
-                  </td>
-                  <td className="data-table__action">
-                    {a.status === "open" ? (
-                      <button
-                        type="button"
-                        className="btn btn--small"
-                        disabled={busy === keyOf(a)}
-                        onClick={() => void acknowledge(a)}
-                      >
-                        {busy === keyOf(a) ? "Saving..." : "Acknowledge"}
-                      </button>
-                    ) : (
-                      <span className="data-table__soft">
-                        {a.acknowledgedBy ? `by ${a.acknowledgedBy.name}` : ""}
-                        {a.acknowledgedAt ? ` ${formatWhen(a.acknowledgedAt, now)}` : ""}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        // Rows, not a table: the reason and the action are sentences, and a table with a wide
+        // column pushed the Acknowledge button out of the card.
+        <ul className="alert-list">
+          {shown.map((a) => (
+            <li key={keyOf(a)} className="alert-row">
+              <div className="alert-row__when">
+                <span>{formatWhen(a.startedAt, now)}</span>
+                <span className="data-table__soft">
+                  {formatDuration(a.durationMinutes)}
+                  {a.ongoing && ", ongoing"}
+                </span>
+              </div>
+
+              <div className="alert-row__body">
+                <div className="alert-row__what">
+                  <strong>{a.title}</strong>
+                  <TierBadge level={a.level} small />
+                  <EvidenceChip level={a.evidenceLevel} />
+                </div>
+                <p>{a.reason}</p>
+                <p className="data-table__soft">
+                  <strong>Action:</strong> {a.recommendedAction}
+                </p>
+              </div>
+
+              <div className="alert-row__side">
+                <span className={`chip ${a.status === "open" ? "chip--alert" : "chip--quiet"}`}>
+                  {a.status === "open" ? "Open" : "Acknowledged"}
+                </span>
+                {a.status === "open" ? (
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    disabled={busy === keyOf(a)}
+                    onClick={() => void acknowledge(a)}
+                  >
+                    {busy === keyOf(a) ? "Saving..." : "Acknowledge"}
+                  </button>
+                ) : (
+                  <span className="data-table__soft">
+                    {a.acknowledgedBy ? `by ${a.acknowledgedBy.name}` : ""}
+                    {a.acknowledgedAt ? ` ${formatWhen(a.acknowledgedAt, now)}` : ""}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

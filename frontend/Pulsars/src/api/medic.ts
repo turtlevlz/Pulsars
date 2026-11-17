@@ -1,5 +1,6 @@
 import type { CheckupSummary } from "./checkups";
 import { request } from "./client";
+import type { AlertItem } from "./metrics";
 import type { Symptom } from "./symptoms";
 import type { VitalType } from "./vitals";
 
@@ -12,8 +13,10 @@ export type RosterPatient = {
   age: number | null;
   /** ISO timestamp of the newest reading of any vital, or null if there is none yet. */
   lastReadingAt: string | null;
-  /** Threshold alerts nobody has acknowledged yet (last 7 days). */
+  /** Health alerts nobody has acknowledged yet (last 7 days). */
   openAlerts: number;
+  /** The worst level among them, or null when there are none. */
+  openAlertLevel: "red" | "yellow" | null;
 };
 
 export type PatientHit = { id: number; name: string };
@@ -26,7 +29,11 @@ export function searchPatients(q: string, signal?: AbortSignal) {
   return request<PatientHit[]>(`/patients/search?q=${encodeURIComponent(q)}`, { signal });
 }
 
-export type Threshold = { bound: "upper" | "lower"; limit: number };
+/** The dashed reference line on a chart (from the backend's metrics config), not an alert limit. */
+export type Threshold = { bound: "upper" | "lower"; limit: number; label: string };
+
+/** What is normal for this person at that time: drawn as a shaded band behind the line. */
+export type BaselineBand = { t: string; low: number; high: number };
 
 export type TrendPoint = { t: string; avg: number; min: number; max: number };
 
@@ -36,7 +43,10 @@ export type Trend = {
   from: string;
   to: string;
   bucketSeconds: number;
-  threshold: Threshold;
+  /** Null where a single limit would mislead (skin temperature). */
+  threshold: Threshold | null;
+  /** Null until the person has a baseline, and for blood oxygen. */
+  baseline: BaselineBand[] | null;
   /** Oldest first; buckets without readings are left out. */
   points: TrendPoint[];
 };
@@ -71,16 +81,12 @@ export function getSummary(patientId: number, from: Date, to: Date, signal?: Abo
   );
 }
 
-export type Alert = {
-  type: VitalType;
-  unit: string;
-  threshold: Threshold;
-  /** Start of the first minute past the limit; with the type, this identifies the alert. */
+/** One alert: a stretch of time in which one rule was yellow or red, with what to do about it. */
+export type Alert = AlertItem & {
+  /** Start of the alert; with the rule, this identifies it. */
   startedAt: string;
   endedAt: string;
   durationMinutes: number;
-  /** The worst minute average (highest for an upper limit, lowest for a lower one). */
-  peak: number;
   ongoing: boolean;
   status: "open" | "acknowledged";
   acknowledgedAt: string | null;
@@ -91,10 +97,10 @@ export function listAlerts(patientId: number, from: Date, to: Date, signal?: Abo
   return request<Alert[]>(`/users/${patientId}/alerts?from=${iso(from)}&to=${iso(to)}`, { signal });
 }
 
-export function acknowledgeAlert(patientId: number, alert: Pick<Alert, "type" | "startedAt">) {
+export function acknowledgeAlert(patientId: number, alert: Pick<Alert, "ruleId" | "startedAt">) {
   return request<Alert>(`/users/${patientId}/alerts/acknowledge`, {
     method: "POST",
-    body: { type: alert.type, startedAt: alert.startedAt },
+    body: { ruleId: alert.ruleId, startedAt: alert.startedAt },
   });
 }
 

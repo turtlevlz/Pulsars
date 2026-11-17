@@ -1,4 +1,7 @@
-// Publishes fake sensor readings to the MQTT broker, like a wearable would.
+// Publishes a fake skin-temperature reading to the MQTT broker, like the wearable would, every
+// interval. Only skin temperature (`bt`) is simulated, and it stays put: a fixed resting value with
+// a tiny jitter, so it never drifts into a tier change. Heart rate, blood oxygen and motion are not
+// published at all (use the real band for those).
 //   npm run simulate -- [userId=2] [intervalMs=1000] [count=0 (forever)]
 import 'dotenv/config';
 import mqtt from 'mqtt';
@@ -6,16 +9,14 @@ import mqtt from 'mqtt';
 const [userId = '2', intervalMs = '1000', count = '0'] = process.argv.slice(2);
 const url = process.env.MQTT_URL ?? 'mqtt://localhost:1883';
 
-// Random walks around a resting baseline, clamped to plausible ranges.
-const state = { hr: 72, bt: 36.7, bo: 97 };
-const step = { hr: 3, bt: 0.1, bo: 0.5 };
-const clamp = { hr: [45, 140], bt: [30, 39], bo: [90, 100] } as const;
+// A typical wrist skin temperature, with +/- 0.05 °C of sensor noise. Not a random walk: the next
+// value does not depend on the last one, so the series cannot wander away from the base.
+const BASE_CELSIUS = 36.6;
+const JITTER_CELSIUS = 0.05;
 
-function next(type: keyof typeof state): number {
-    const [lo, hi] = clamp[type];
-    const v = state[type] + (Math.random() - 0.5) * 2 * step[type];
-    state[type] = Math.min(hi, Math.max(lo, v));
-    return Math.round(state[type] * 10) / 10;
+function nextTemperature(): number {
+    const value = BASE_CELSIUS + (Math.random() - 0.5) * 2 * JITTER_CELSIUS;
+    return Math.round(value * 100) / 100;
 }
 
 const client = mqtt.connect(url, { clientId: `pulsars-sim-${process.pid}` });
@@ -23,14 +24,12 @@ let sent = 0;
 
 client.on('error', (err) => console.error('mqtt error:', err.message));
 client.on('connect', () => {
-    console.log(`Publishing for user ${userId} to ${url} every ${intervalMs}ms (Ctrl+C to stop)`);
+    console.log(`Publishing skin temperature for user ${userId} to ${url} every ${intervalMs}ms (Ctrl+C to stop)`);
     const timer = setInterval(async () => {
         const recordedAt = new Date().toISOString();
-        for (const type of ['hr', 'bt', 'bo'] as const) {
-            const value = next(type);
-            await client.publishAsync(`pulsars/${userId}/vitals/${type}`, JSON.stringify({ value, recordedAt }), { qos: 1 });
-            console.log(`${recordedAt} ${type}=${value}`);
-        }
+        const value = nextTemperature();
+        await client.publishAsync(`pulsars/${userId}/vitals/bt`, JSON.stringify({ value, recordedAt }), { qos: 1 });
+        console.log(`${recordedAt} bt=${value}`);
         if (Number(count) > 0 && ++sent >= Number(count)) {
             clearInterval(timer);
             await client.endAsync();

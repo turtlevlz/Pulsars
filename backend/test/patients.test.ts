@@ -52,21 +52,23 @@ describe('GET /patients/overview', () => {
         const last = new Date(Date.now() - 3 * 60_000);
         await prisma.heartRate.create({ data: { userId: a.id, heartRate: 70, recordedAt: new Date(Date.now() - 10 * 60_000) } });
         await prisma.bodyTemp.create({ data: { userId: a.id, bodyTemp: 33, recordedAt: last } });
-        // Bob: 3 minutes above the heart-rate limit, a few hours ago
+        // Bob: ten minutes of blood oxygen below 90%, a few hours ago
         const start = Math.floor((Date.now() - 4 * 3600_000) / 60_000) * 60_000;
-        await prisma.heartRate.createMany({
-            data: [0, 1, 2].flatMap((m) => [0, 30].map((s) => ({ userId: b.id, heartRate: 120, recordedAt: new Date(start + m * 60_000 + s * 1000) }))),
+        await prisma.bloodOxygen.createMany({
+            data: Array.from({ length: 10 }, (_, m) => [0, 30].map((s) => ({ userId: b.id, bloodO: 85, recordedAt: new Date(start + m * 60_000 + s * 1000) }))).flat(),
         });
 
         const res = await api(medic).get('/patients/overview');
         expect(res.status).toBe(200);
         expect(res.body.map((p: { name: string }) => p.name)).toEqual(['Alice', 'Bob']);
-        expect(res.body[0]).toMatchObject({ id: a.id, age: 30, openAlerts: 0 });
+        expect(res.body[0]).toMatchObject({ id: a.id, age: 30, openAlerts: 0, openAlertLevel: null });
         expect(new Date(res.body[0].lastReadingAt).getTime()).toBe(last.getTime());
-        expect(res.body[1]).toMatchObject({ id: b.id, openAlerts: 1 });
+        // a red alert (blood oxygen below 90% three minutes in a row) is open, and it is the worst level
+        expect(res.body[1]).toMatchObject({ id: b.id, openAlerts: 1, openAlertLevel: 'red' });
 
-        await api(medic).post(`/users/${b.id}/alerts/acknowledge`).send({ type: 'hr', startedAt: new Date(start).toISOString() }).expect(200);
-        expect((await api(medic).get('/patients/overview')).body[1].openAlerts).toBe(0);
+        const [alert] = (await api(medic).get(`/users/${b.id}/alerts`)).body;
+        await api(medic).post(`/users/${b.id}/alerts/acknowledge`).send({ ruleId: alert.ruleId, startedAt: alert.startedAt }).expect(200);
+        expect((await api(medic).get('/patients/overview')).body[1]).toMatchObject({ openAlerts: 0, openAlertLevel: null });
     });
 
     it('is empty for a medic with no patients, and for medics only', async () => {

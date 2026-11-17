@@ -9,6 +9,8 @@ import {
   listPatientSymptoms,
 } from "../api/medic";
 import type { Alert, Latest, Trend, VitalSummary } from "../api/medic";
+import { getMetricStatus } from "../api/metrics";
+import type { MetricStatusResponse } from "../api/metrics";
 import type { CheckupSummary } from "../api/checkups";
 import type { Symptom } from "../api/symptoms";
 import type { VitalType } from "../api/vitals";
@@ -24,6 +26,8 @@ export type PatientData = {
   summary: Record<VitalType, VitalSummary>;
   previous: Record<VitalType, VitalSummary>;
   alerts: Alert[];
+  /** The tier of every metric right now. */
+  health: MetricStatusResponse;
   symptoms: Symptom[];
   checkups: CheckupSummary[];
   /** When this was fetched (ms). */
@@ -52,19 +56,20 @@ export function usePatientDashboard(patientId: number | null, range: RangeId) {
       const from = new Date(to.getTime() - rangeById(range).ms);
       const before = new Date(from.getTime() - rangeById(range).ms);
       try {
-        const [trendList, latest, summary, previous, alerts, symptoms, checkups] = await Promise.all([
+        const [trendList, latest, summary, previous, alerts, health, symptoms, checkups] = await Promise.all([
           Promise.all(TYPES.map((t) => getTrend(patientId, t, from, to, signal))),
           getLatest(patientId, signal),
           getSummary(patientId, from, to, signal),
           getSummary(patientId, before, new Date(from.getTime() - 1), signal),
           listAlerts(patientId, from, to, signal),
+          getMetricStatus(patientId, signal),
           listPatientSymptoms(patientId, from, to, signal),
           listPatientCheckups(patientId, signal),
         ]);
         const trends = Object.fromEntries(trendList.map((t) => [t.type, t])) as Record<VitalType, Trend>;
         setLoaded({
           key,
-          data: { trends, latest, summary, previous, alerts, symptoms, checkups, fetchedAt: to.getTime() },
+          data: { trends, latest, summary, previous, alerts, health, symptoms, checkups, fetchedAt: to.getTime() },
         });
         setFailure(null);
       } catch (err) {

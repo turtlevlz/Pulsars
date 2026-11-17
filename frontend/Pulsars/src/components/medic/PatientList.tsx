@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { searchPatients } from "../../api/medic";
 import type { PatientHit, RosterPatient } from "../../api/medic";
 import { rosterStatus, sortRoster } from "../../lib/medic";
+import TierBadge from "../metrics/TierBadge";
 
 type PatientListProps = {
   patients: RosterPatient[];
@@ -67,7 +68,7 @@ export default function PatientList({ patients, loading, error, selectedId, now,
       {mine.length > 0 && (
         <ul className="roster__list">
           {mine.map((p) => {
-            const { status, label, note } = rosterStatus(p, now);
+            const { status, label, note, level } = rosterStatus(p, now);
             return (
               <li key={p.id}>
                 <button
@@ -78,7 +79,7 @@ export default function PatientList({ patients, loading, error, selectedId, now,
                 >
                   <span className="roster__name">{p.name}</span>
                   <span className="roster__status">
-                    <span className={`chip chip--${status}`}>{label}</span>
+                    {level ? <TierBadge level={level} small /> : <span className={`chip chip--${status}`}>{label}</span>}
                     <span className="roster__note">{note}</span>
                   </span>
                 </button>

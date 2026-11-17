@@ -46,11 +46,16 @@ const rows: Row[] = [
     ['GET /users/:id/fitness/day', (c, w) => c.get(`/users/${w.patient.id}/fitness/day?date=2026-10-01&timeZone=UTC`), [401, 403, 403, 'ok', 'ok']],
     ['GET /users/:id/fitness/routines', (c, w) => c.get(`/users/${w.patient.id}/fitness/routines?timeZone=UTC`), [401, 403, 403, 'ok', 'ok']],
 
-    // alerts: for the medic who follows the patient, and nobody else (not even the patient)
-    ['GET /users/:id/alerts', (c, w) => c.get(`/users/${w.patient.id}/alerts`), [401, 403, 403, 'ok', 403]],
+    // health metrics: the tiers, the alerts and the manual logs follow the same read rule as vitals
+    ['GET /users/:id/metrics/status', (c, w) => c.get(`/users/${w.patient.id}/metrics/status`), [401, 403, 403, 'ok', 'ok']],
+    ['GET /users/:id/alerts', (c, w) => c.get(`/users/${w.patient.id}/alerts`), [401, 403, 403, 'ok', 'ok']],
+    ['GET /users/:id/logs', (c, w) => c.get(`/users/${w.patient.id}/logs`), [401, 403, 403, 'ok', 'ok']],
+    // the thresholds themselves are not patient data: any signed-in user
+    ['GET /metrics/config', (c) => c.get('/metrics/config'), [401, 'ok', 'ok', 'ok', 'ok']],
+    // acknowledging an alert: only the medic who follows the patient (a patient cannot dismiss their own warning)
     [
         'POST /users/:id/alerts/acknowledge',
-        (c, w) => c.post(`/users/${w.patient.id}/alerts/acknowledge`).send({ type: 'hr', startedAt: '2026-11-14T10:00:00Z' }),
+        (c, w) => c.post(`/users/${w.patient.id}/alerts/acknowledge`).send({ ruleId: 'spo2', startedAt: '2026-11-14T10:00:00Z' }),
         [401, 403, 403, 'ok', 403],
     ],
 
@@ -65,6 +70,15 @@ const rows: Row[] = [
         [401, 403, 403, 403, 'ok'],
     ],
     ['POST /users/:id/vitals', (c, w) => c.post(`/users/${w.patient.id}/vitals`).send({ type: 'hr', value: 70 }), [401, 403, 403, 403, 'ok']],
+    [
+        'POST /users/:id/logs',
+        (c, w) =>
+            c.post(`/users/${w.patient.id}/logs`).send({
+                kind: 'bp',
+                value: { systolic: 118, diastolic: 76, heartRate: 68, posture: 'seated', restedFiveMinutes: true, armAtHeartLevel: true, symptoms: [] },
+            }),
+        [401, 403, 403, 403, 'ok'],
+    ],
     ['POST /users/:id/symptoms', (c, w) => c.post(`/users/${w.patient.id}/symptoms`).send({ name: 'Cough', intensity: 2, frequency: 'daily' }), [401, 403, 403, 403, 'ok']],
     ['PATCH /symptoms/:id', (c, w) => c.patch(`/symptoms/${w.symptom.id}`).send({ intensity: 4 }), [401, 403, 403, 403, 'ok']],
     ['DELETE /symptoms/:id', (c, w) => c.delete(`/symptoms/${w.symptom.id}`), [401, 403, 403, 403, 'ok']],
