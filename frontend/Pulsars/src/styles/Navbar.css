@@ -1,0 +1,189 @@
+.navbar {
+  background: #15152b;
+  border-bottom: 1px solid #2d2d4f;
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+.navbar__inner {
+  /* Bulma (index.html) makes .navbar a flex container on wide screens, which would shrink this to
+     fit its content and leave the links and user menu bunched up on the left. */
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  /* the user menu sits close to the right edge of the screen; the logo keeps the page's left margin */
+  padding: 10px 12px 10px 48px;
+}
+
+.navbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.navbar__name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.navbar__links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navbar__link {
+  display: block;
+  padding: 8px 18px;
+  border-radius: 999px;
+  color: #9a9bc4;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: color 150ms, background 150ms;
+}
+
+.navbar__link:hover {
+  color: #fff;
+  background: rgba(79, 70, 229, 0.18);
+}
+
+.navbar__link--active {
+  color: #fff;
+  background: #4f46e5;
+}
+
+.navbar__link--active:hover {
+  background: #4f46e5;
+}
+
+.navbar__brand:focus-visible,
+.navbar__link:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  /* Row 1: logo and user menu. Row 2: the links. */
+  .navbar__inner {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 10px 8px 10px 16px;
+  }
+
+  .navbar__links {
+    order: 2;
+    flex-basis: 100%;
+    overflow-x: auto;
+  }
+
+  .user-menu {
+    order: 1;
+  }
+
+  .navbar__link {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .navbar__name {
+    display: none;
+  }
+}
+
+/* "Hello <name>" menu, pinned to the right edge of the bar */
+.user-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.user-menu__button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  border: 1px solid #2d2d4f;
+  border-radius: 999px;
+  background: transparent;
+  padding: 7px 14px;
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms;
+}
+
+.user-menu__button:hover,
+.user-menu__button[aria-expanded="true"] {
+  border-color: #4f46e5;
+  background: rgba(79, 70, 229, 0.18);
+}
+
+.user-menu__hello {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu__chevron {
+  flex: none;
+  color: #9a9bc4;
+  transition: transform 150ms;
+}
+
+.user-menu__button[aria-expanded="true"] .user-menu__chevron {
+  transform: rotate(180deg);
+}
+
+.user-menu__list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 100%;
+  padding: 6px;
+  border: 1px solid #2d2d4f;
+  border-radius: 12px;
+  background: #15152b;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.user-menu__item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 9px 14px;
+  color: #e2e3f6;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.user-menu__item:hover {
+  background: rgba(79, 70, 229, 0.3);
+  color: #fff;
+}
+
+.user-menu__button:focus-visible,
+.user-menu__item:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .user-menu__button {
+    max-width: 220px;
+    padding: 7px 10px;
+  }
+}

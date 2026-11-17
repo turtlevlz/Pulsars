@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  patient
+  medic
+}
+
+enum Frequency {
+  once
+  daily
+  several_daily
+  weekly
+  constant
+}
+
+enum CheckupStatus {
+  assigned
+  completed
+}
+
+enum ThreadStatus {
+  open
+  done
+}
+
+enum MessageRole {
+  assistant
+  patient
+}
+
+model User {
+  id           Int    @id @default(autoincrement())
+  name         String
+  // Login identifier. Stored lower-case; uniqueness is what makes it usable for login.
+  email        String @unique
+  passwordHash String @map("password_hash")
+  // Bumped when the password changes, so tokens issued before the change stop working.
+  tokenVersion Int    @default(0) @map("token_version")
+  role         Role   @default(patient)
+  weight       Float?
+  height       Float?
+  age          Int?
+  // Where the person is (see config/metrics.json "profiles"); decides which checks are enabled.
+  environmentProfile String @default("station") @map("environment_profile") @db.VarChar(16)
+
+  // Lifetime averages, written only by vitals ingestion (see docs/plan.md §3.1).
+  avgHr   Float? @map("avg_hr")
+  avgBt   Float? @map("avg_bt")
+  avgBo   Float? @map("avg_bo")
+  hrCount Int    @default(0) @map("hr_count")
+  btCount Int    @default(0) @map("bt_count")
+  boCount Int    @default(0) @map("bo_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  heartRates         HeartRate[]
+  bodyTemps          BodyTemp[]
+  bloodOxygens       BloodOxygen[]
+  symptoms           Symptom[]
+  patientCheckups    Checkup[]              @relation("PatientCheckups")
+  medicCheckups      Checkup[]              @relation("MedicCheckups")
+  fitnessWindows     FitnessWindow[]
+  routineCompletions RoutineCompletion[]
+  alertAcks          AlertAcknowledgement[] @relation("AlertPatient")
+  alertsAcked        AlertAcknowledgement[] @relation("AlertAcknowledger")
+  logEntries         LogEntry[]
+  baselines          Baseline[]
+
+  @@map("users")
+}
+
+model FitnessWindow {
+  userId       Int      @map("user_id")
+  deviceId     String   @map("device_id") @db.VarChar(64)
+  bootId       String   @map("boot_id") @db.VarChar(64)
+  deviceTimeMs BigInt   @map("device_time_ms")
+  recordedAt   DateTime @map("recorded_at") @db.Timestamptz(3)
+  bands        Int[]    @db.SmallInt
+  context      Json
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, deviceId, bootId, deviceTimeMs])
+  @@index([userId, recordedAt])
+  @@map("fitness_windows")
+}
+
+model RoutineCompletion {
+  userId      Int      @map("user_id")
+  routineKey  String   @map("routine_key") @db.VarChar(32)
+  localDate   String   @map("local_date") @db.VarChar(10)
+  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, routineKey, localDate])
+  @@index([userId, completedAt])
+  @@map("routine_completions")
+}
+
+model HeartRate {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  heartRate  Float    @map("heart_rate")
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recordedAt])
+  @@map("heart_rates")
+}
+
+model BodyTemp {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  bodyTemp   Float    @map("body_temp")
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recordedAt])
+  @@map("body_temps")
+}
+
+model BloodOxygen {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  bloodO     Float    @map("blood_o")
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recordedAt])
+  @@map("blood_oxygens")
+}
+
+model Symptom {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  name            String
+  // 1-5, enforced by a CHECK constraint added in the init migration.
+  intensity       Int
+  notes           String?
+  durationMinutes Int?      @map("duration_minutes")
+  frequency       Frequency
+  loggedAt        DateTime  @default(now()) @map("logged_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threads FollowupThread[]
+
+  @@index([userId, loggedAt])
+  @@map("symptoms")
+}
+
+model Checkup {
+  id          Int           @id @default(autoincrement())
+  userId      Int           @map("user_id")
+  medicId     Int           @map("medic_id")
+  name        String
+  description String?
+  status      CheckupStatus @default(assigned)
+  assignedAt  DateTime      @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  dueAt       DateTime?     @map("due_at") @db.Timestamptz(6)
+  completedAt DateTime?     @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  patient   User       @relation("PatientCheckups", fields: [userId], references: [id], onDelete: Cascade)
+  medic     User       @relation("MedicCheckups", fields: [medicId], references: [id])
+  questions Question[]
+
+  @@index([userId, status])
+  @@index([medicId])
+  @@map("checkups")
+}
+
+model Question {
+  id        Int      @id @default(autoincrement())
+  checkupId Int      @map("checkup_id")
+  question  String
+  answer    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  checkup Checkup @relation(fields: [checkupId], references: [id], onDelete: Cascade)
+
+  @@index([checkupId])
+  @@map("questions")
+}
+
+model FollowupThread {
+  id        Int          @id @default(autoincrement())
+  symptomId Int          @map("symptom_id")
+  status    ThreadStatus @default(open)
+  createdAt DateTime     @default(now()) @map("created_at")
+  closedAt  DateTime?    @map("closed_at")
+
+  symptom  Symptom           @relation(fields: [symptomId], references: [id], onDelete: Cascade)
+  messages FollowupMessage[]
+
+  @@index([symptomId])
+  @@map("followup_threads")
+}
+
+model FollowupMessage {
+  id        Int         @id @default(autoincrement())
+  threadId  Int         @map("thread_id")
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  thread FollowupThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("followup_messages")
+}
+
+// Alerts are worked out from the readings and logs when asked for (modules/alerts, modules/metrics),
+// so there is no alert row. This table only records which episodes a medic has acknowledged; an
+// episode is identified by its patient, rule (a metric id like `hr_resting`, or a cross rule id)
+// and the start of its first non-green step.
+model AlertAcknowledgement {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  ruleId         String   @map("rule_id") @db.VarChar(64)
+  startedAt      DateTime @map("started_at") @db.Timestamptz(6)
+  acknowledgedBy Int?     @map("acknowledged_by")
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at") @db.Timestamptz(6)
+
+  patient      User  @relation("AlertPatient", fields: [userId], references: [id], onDelete: Cascade)
+  acknowledger User? @relation("AlertAcknowledger", fields: [acknowledgedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, ruleId, startedAt])
+  @@map("alert_acknowledgements")
+}
+
+// Manual entries: blood pressure, sleep, core temperature, exercise, orthostatic check. The
+// shape of `value` depends on `kind` and is validated by modules/logs/schemas.ts.
+model LogEntry {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  kind       String   @db.VarChar(16)
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(6)
+  value      Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, recordedAt(sort: Desc)])
+  @@map("log_entries")
+}
+
+// A person's own set points (resting heart rate, skin-temperature curve, usual blood pressure),
+// recomputed from their data when older than 15 minutes (modules/metrics/baselines.ts).
+model Baseline {
+  userId    Int      @map("user_id")
+  metricId  String   @map("metric_id") @db.VarChar(64)
+  rule      String
+  value     Json
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, metricId])
+  @@map("baselines")
+}

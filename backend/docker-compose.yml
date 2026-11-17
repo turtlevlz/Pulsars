@@ -1,0 +1,42 @@
+# Local development services. Works with `docker compose` or `podman compose`.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pulsars
+      POSTGRES_PASSWORD: pulsars
+      POSTGRES_DB: pulsars
+    ports:
+      # Host port 5433 so it doesn't clash with a Postgres already running on 5432.
+      # Loopback by default; POSTGRES_PORT may be a port or ip:port (e.g. 127.0.0.1:5433).
+      - '${POSTGRES_PORT:-127.0.0.1:5433}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pulsars -d pulsars']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      # Loopback by default: the dev broker allows anonymous access (see mosquitto.conf), so it
+      # must not be reachable from the network (the venue's Wi-Fi, for instance).
+      # MQTT_PORT may be a port or ip:port (e.g. 127.0.0.1:1883). A bare port listens on every interface.
+      - '${MQTT_PORT:-127.0.0.1:1883}:1883'
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # Optional local LLM for the symptom assistant: `docker compose --profile llm up`
+  ollama:
+    image: ollama/ollama
+    profiles: ['llm']
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  pgdata:
+  ollama:

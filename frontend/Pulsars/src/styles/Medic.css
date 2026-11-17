@@ -1,0 +1,676 @@
+/* ---------- Medic dashboard (loaded after Pulsars.css, which has the tokens and shared pieces) ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pulsars.medic {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr) 330px;
+  gap: 24px;
+  align-items: start;
+  padding: 32px 36px 48px;
+}
+
+.medic__left,
+.medic__main,
+.medic__right {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.medic__vitals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.medic__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.medic-loading {
+  color: var(--text-soft);
+}
+
+.medic-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text-soft);
+}
+
+/* ---------- Small shared pieces ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent-text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.chip--alert {
+  border-color: #ff6b81;
+  background: rgba(255, 107, 129, 0.12);
+  color: #ffb3c0;
+}
+
+.chip--late {
+  border-color: #ff6b81;
+  color: #ffb3c0;
+}
+
+.chip--normal,
+.chip--done {
+  border-color: #3ecf8e;
+  color: #7be3b6;
+}
+
+.chip--quiet,
+.chip--nodata,
+.chip--open {
+  border-color: var(--surface-muted);
+  color: var(--text-soft);
+}
+
+.chip--due {
+  border-color: #f5b942;
+  color: #f8d08a;
+}
+
+.form-ok {
+  margin: 0;
+  color: #7be3b6;
+  font-size: 0.9rem;
+}
+
+.btn--small {
+  padding: 6px 14px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.btn--small:hover:not(:disabled) {
+  background: rgba(79, 70, 229, 0.25);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.segmented__btn {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: transparent;
+  padding: 7px 14px;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 150ms, border-color 150ms, background 150ms;
+}
+
+.segmented__btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.segmented__btn--on {
+  border-color: var(--accent);
+  background: rgba(79, 70, 229, 0.25);
+  color: var(--text);
+}
+
+.segmented__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.segmented__btn:focus-visible,
+.roster__item:focus-visible,
+.btn--small:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+.medic-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.medic-panel__meta {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+/* ---------- Patient list ---------- */
+.medic-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 20px;
+}
+
+.roster__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: transparent;
+  padding: 11px 14px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms;
+}
+
+.roster__item:hover {
+  border-color: var(--surface-muted);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.roster__item--selected {
+  border-color: var(--accent);
+  background: rgba(79, 70, 229, 0.16);
+}
+
+.roster__name {
+  font-size: 0.98rem;
+}
+
+.roster__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roster__note {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.roster__heading {
+  margin: 4px 0 -2px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.roster__empty,
+.roster__foot {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.roster__foot {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+
+/* ---------- Patient header ---------- */
+.medic-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 18px 24px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: #d9daf5;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.medic-header__who {
+  flex: 1;
+  min-width: 160px;
+}
+
+.medic-header__name {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.medic-header__meta {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.medic-header__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---------- Vitals ---------- */
+.medic-vital {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 18px 18px 16px;
+  border: 1px solid transparent;
+}
+
+.medic-vital .vital-card__header {
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-height: 2rem;
+}
+
+.medic-vital .chip {
+  padding: 0 9px;
+  font-size: 0.7rem;
+}
+
+.medic-vital .card__title {
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+
+.medic-vital .vital-card__value {
+  font-size: 2.1rem;
+}
+
+.vital-card__updated {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+.trend__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.7rem;
+}
+
+.medic-vital__note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.medic-vital__note + .medic-vital__note {
+  margin-top: 2px;
+}
+
+.trend__speck {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.trend {
+  position: relative;
+  height: 132px;
+  border-radius: var(--radius-inner);
+  background: var(--surface);
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.trend svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.trend__limit {
+  stroke: var(--text-soft);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+
+.trend__dot {
+  width: 10px;
+  height: 10px;
+}
+
+.trend__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+/* The two ends of the scale, written on the chart */
+.trend__grid {
+  stroke: var(--surface-muted);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.trend__y {
+  position: absolute;
+  left: 6px;
+  transform: translateY(-50%);
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 0.68rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+/* Pointing at the chart */
+.trend__cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--text-soft);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.trend__hover-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid;
+  border-radius: 50%;
+  background: var(--card);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.trend__tip {
+  position: absolute;
+  top: 6px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 10px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.trend__tip strong {
+  color: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.trend__tip span {
+  color: var(--text-soft);
+}
+
+/* What the dashed line and the shaded band are, under the chart */
+.trend__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: auto 0 0;
+  padding: 10px 0 0;
+  list-style: none;
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.trend__legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.trend__swatch {
+  flex: none;
+  width: 16px;
+}
+
+.trend__swatch--limit {
+  margin-top: 0.6em;
+  border-top: 2px dashed var(--text-soft);
+}
+
+.trend__swatch--band {
+  height: 8px;
+  margin-top: 0.3em;
+  border-radius: 2px;
+  background: var(--tier-green);
+  opacity: 0.4;
+}
+
+/* ---------- Tables ---------- */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.data-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.data-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table__soft {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.data-table__action {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table__wrap {
+  min-width: 130px;
+  color: var(--text-soft);
+  overflow-wrap: break-word;
+}
+
+.link-button {
+  align-self: flex-start;
+  margin-top: 10px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:focus-visible {
+  outline: 2px solid #8e7cff;
+  outline-offset: 2px;
+}
+
+/* ---------- Summary ---------- */
+.medic-summary__title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.medic-summary__list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+/* ---------- Check-up history ---------- */
+.medic-symptoms {
+  display: flex;
+  flex-direction: column;
+}
+
+.medic-checkups__list {
+  display: flex;
+  flex-direction: column;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.medic-checkups__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.medic-checkups__item:last-child {
+  border-bottom: 0;
+}
+
+.medic-checkups__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.medic-checkups__progress {
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+/* ---------- Right column ---------- */
+.medic-messages .history__empty {
+  margin-top: 14px;
+}
+
+.medic-assign {
+  padding: 22px 20px;
+}
+
+.medic-assign__questions {
+  margin: 0;
+  padding: 12px 14px 12px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1280px) {
+  .pulsars.medic {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  .medic__right {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 960px) {
+  .pulsars.medic {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 24px 16px 40px;
+  }
+
+  .medic__vitals,
+  .medic__pair,
+  .medic__right {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .medic__right {
+    display: flex;
+  }
+}

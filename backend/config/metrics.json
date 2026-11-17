@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "disclaimer": "Proposed alert tiers, not NASA limits. The band is a wellness-grade sensor and this is not a diagnostic device.",
+  "profiles": [
+    { "id": "station", "label": "Space station", "gravity": false, "note": "Microgravity." },
+    { "id": "spacecraft", "label": "Spacecraft", "gravity": false, "note": "Microgravity." },
+    { "id": "rover", "label": "Surface rover", "gravity": true, "note": "Treated as a surface environment, so gravity checks are on. This is an assumption to confirm." },
+    { "id": "moon", "label": "Moon base", "gravity": true, "note": "About 1/6 g." },
+    { "id": "mars", "label": "Mars base", "gravity": true, "note": "About 0.38 g." }
+  ],
+  "default_profile": "station",
+  "escalate_to": "crew medical officer",
+
+  "chart_limits": {
+    "hr": { "bound": "upper", "limit": 100, "label": "100 bpm: top of the usual resting range" },
+    "bt": null,
+    "bo": { "bound": "lower", "limit": 95, "label": "95 %: green at or above" }
+  },
+
+  "metrics": [
+    {
+      "metric_id": "hr_resting",
+      "title": "Resting heart rate",
+      "input": "sensor",
+      "vital": "hr",
+      "unit": "bpm",
+      "baseline_rule": "7-day median of the heart rate in resting minutes (resting = no motion in the wrist band for at least 10 minutes in a row)",
+      "tiers": {
+        "green": "within +/-10% of your baseline AND 50-100 bpm",
+        "yellow": "more than 10% off your baseline for at least 30 resting minutes in a row, OR resting below 50 or above 100 for at least 10 minutes",
+        "red": "resting above 120 or below 40 for at least 10 minutes, OR an abnormal value together with chest pain, fainting or shortness of breath logged in the last 2 hours"
+      },
+      "persistence": "30 min for a change from baseline; 10 min for the absolute limits",
+      "evidence_level": "OUR_HEURISTIC",
+      "evidence_note": "Adult resting 60-100 bpm is a clinical convention. In-flight heart rate tends to run lower, so your own baseline matters more than the absolute numbers.",
+      "sources": [
+        "Adult resting heart rate 60-100 bpm: clinical convention",
+        "Long-duration spaceflight heart rate and arterial pressure: https://peeref.com/works/15357458"
+      ],
+      "limitation": "Needs a baseline built from your own resting data. Accuracy depends on band fit and motion, and the tile stays gray until the band has seen you at rest.",
+      "action": {
+        "yellow": "Rest, recheck in a few minutes, and review hydration, sleep and stress.",
+        "red": "Tell the crew medical officer / ground medical now."
+      },
+      "stale_after_minutes": 15,
+      "params": {
+        "rest_run_minutes": 10,
+        "min_tracked_seconds_per_minute": 30,
+        "quiet_fraction": 0.9,
+        "rest_hold_minutes": 60,
+        "min_resting_minutes": 3,
+        "baseline_days": 7,
+        "baseline_exclude_hours": 6,
+        "baseline_min_resting_minutes": 30,
+        "green_band_pct": 10,
+        "green_min": 50,
+        "green_max": 100,
+        "yellow_sustained_minutes": 30,
+        "absolute_sustained_minutes": 10,
+        "red_high": 120,
+        "red_low": 40,
+        "red_sustained_minutes": 10,
+        "lookback_minutes": 180,
+        "symptom_window_minutes": 120
+      },
+      "explain": {
+        "how": "Wear the band snugly. Your resting heart rate is only read when you have been still for about ten minutes, so sit or float quietly now and then.",
+        "meaning": "Your heart rate while resting, compared with your own usual resting rate. A steady rise or fall can mean stress, poor sleep, illness, dehydration or fatigue.",
+        "why": "Spaceflight changes how the heart and blood vessels work. Your own trend is the most useful early warning."
+      }
+    },
+    {
+      "metric_id": "skin_temp",
+      "title": "Skin temperature",
+      "input": "sensor",
+      "vital": "bt",
+      "unit": "°C",
+      "baseline_rule": "your own median for each hour of the day (UTC) over 14 days, leaving out the last 24 hours",
+      "tiers": {
+        "green": "within your normal curve for this time of day",
+        "yellow": "about 0.5 °C or more above your own curve for the same hour, sustained for 30 minutes (confirm with a thermometer)",
+        "red": "only from a core or oral temperature of 38 °C or more that you logged yourself; the band alone is never red"
+      },
+      "persistence": "30 min",
+      "evidence_level": "OUR_HEURISTIC",
+      "evidence_note": "Wrist skin temperature is not core temperature. Fever is about 38 °C or more measured in the core or mouth.",
+      "sources": [
+        "Core temperature about 36.1-37.8 °C, wrist skin temperature about 33-37 °C",
+        "Wrist-worn core temperature sensor study: https://link.springer.com/article/10.1186/s12938-023-01081-3",
+        "Feasibility of continuous fever monitoring with wearables: https://pmc.ncbi.nlm.nih.gov/articles/PMC7736301"
+      ],
+      "limitation": "Wrist estimates of core temperature can be off by about -0.7 to +0.9 °C. There is no single absolute wrist limit, so the tile needs about 3 days of your own data first.",
+      "action": {
+        "yellow": "Confirm with a thermometer and log the core or oral reading in the Health Log.",
+        "red": "Tell the crew medical officer / ground medical: a core or oral temperature of 38 °C or more."
+      },
+      "stale_after_minutes": 15,
+      "params": {
+        "baseline_days": 14,
+        "baseline_exclude_hours": 24,
+        "baseline_min_days": 3,
+        "baseline_min_minutes_per_hour": 10,
+        "yellow_delta_c": 0.5,
+        "sustained_minutes": 30,
+        "min_minutes_with_data": 15,
+        "core_red_c": 38,
+        "core_fresh_hours": 6
+      },
+      "explain": {
+        "how": "Seat the probe against the inner forearm. For a confirmation, use an oral or core thermometer and log it.",
+        "meaning": "Compared with your own usual temperature for this time of day. Skin temperature naturally rises and falls over the day, so a single number means little.",
+        "why": "A sustained rise can be an early sign of infection or heat stress. Spaceflight changes immune function."
+      }
+    },
+    {
+      "metric_id": "spo2",
+      "title": "Blood oxygen",
+      "input": "sensor",
+      "vital": "bo",
+      "unit": "%",
+      "baseline_rule": "absolute limits (no personal baseline)",
+      "tiers": {
+        "green": "95% or more",
+        "yellow": "90-94%: retest at rest and check the fit of the sensor",
+        "red": "below 90% on at least 3 one-minute medians in a row, never a single reading"
+      },
+      "persistence": "3 consecutive 1-minute medians for red; minutes with motion are skipped",
+      "evidence_level": "CLINICAL_GUIDELINE",
+      "evidence_note": "The 95% and 90% marks are common clinical conventions. The tiers built on them are our own proposal.",
+      "sources": [
+        "Normal SpO2 is 95% or more; below 90% is clinically relevant",
+        "Apple Watch SpO2 vs medical oximeter: https://pmc.ncbi.nlm.nih.gov/articles/PMC9554125"
+      ],
+      "limitation": "A wearable can differ from a medical oximeter by up to about 6% (90-100% range) and 8% (below 90%). Low values are detected reliably on average, but treat a single number with care.",
+      "action": {
+        "yellow": "Retest at rest, check the sensor fit, and check cabin O2 and CO2 if you can.",
+        "red": "Tell the crew medical officer / ground medical, and check the cabin atmosphere."
+      },
+      "stale_after_minutes": 10,
+      "params": {
+        "green_min": 95,
+        "yellow_min": 90,
+        "red_consecutive_minutes": 3,
+        "yellow_consecutive_minutes": 2,
+        "lookback_minutes": 15
+      },
+      "explain": {
+        "how": "Rest a fingertip on the optical sensor and hold still. Motion and a loose fit make the reading unreliable.",
+        "meaning": "The share of your blood carrying oxygen. 95% or more is expected. The tile uses the median of each minute so a single bad second cannot move it.",
+        "why": "Low oxygen can come from the cabin atmosphere, sleep-related changes, or illness, and it affects thinking and fatigue."
+      }
+    },
+    {
+      "metric_id": "bp",
+      "title": "Blood pressure",
+      "input": "log",
+      "unit": "mmHg",
+      "baseline_rule": "median of your last logged readings in the same posture (at least 3 logs, last 30 days)",
+      "tiers": {
+        "green": "below 130/80 and within about 10 mmHg systolic of your baseline; for the low end at least 90/60, within about 20 mmHg of baseline, no symptoms",
+        "yellow": "130-139/80-89, a first reading of 140/90 or more, below 90/60 without symptoms, a mean arterial pressure below 65, or 20 mmHg or more below your baseline",
+        "red": "140/90 or more on repeat, 180/120 or more, any reading with chest pain, neurological symptoms or fainting, below 90/60 with dizziness or near-fainting, or a mean arterial pressure below 65 on repeat"
+      },
+      "persistence": "a repeat means a second reading within 24 hours; a reading with unconfirmed technique can reach at most yellow on the numbers alone",
+      "evidence_level": "CLINICAL_GUIDELINE",
+      "evidence_note": "The categories follow the 2025 AHA/ACC blood pressure guideline. The tiers, the low-pressure limits and the baseline comparison are our own heuristic. A severe threshold of 180/120 is quoted from a secondary source and should be confirmed in the guideline.",
+      "sources": [
+        "2025 AHA/ACC BP categories (Harvard Health summary): https://www.health.harvard.edu/heart-health/reading-the-current-blood-pressure-guidelines",
+        "Hypotension (StatPearls): https://www.statpearls.com/point-of-care/23295"
+      ],
+      "limitation": "Earth categories describe long-term risk. In flight a lower baseline is expected, and fit people often run low without symptoms. A manual reading is only as good as the technique.",
+      "action": {
+        "yellow": "Rest, recheck after 5 minutes with the arm at heart level, and review hydration and intake.",
+        "red": "Lie down, then tell the crew medical officer / ground medical now."
+      },
+      "stale_after_minutes": 2160,
+      "params": {
+        "high_red_sbp": 180,
+        "high_red_dbp": 120,
+        "repeat_high_sbp": 140,
+        "repeat_high_dbp": 90,
+        "yellow_high_sbp": 130,
+        "yellow_high_dbp": 80,
+        "low_sbp": 90,
+        "low_dbp": 60,
+        "low_map": 65,
+        "repeat_within_hours": 24,
+        "baseline_min_logs": 3,
+        "baseline_days": 30,
+        "above_baseline_yellow_mmhg": 10,
+        "below_baseline_yellow_mmhg": 20
+      },
+      "explain": {
+        "how": "Sit or lie quietly for 5 minutes, support the arm at heart level, then log the cuff reading, your heart rate, your posture and any symptoms.",
+        "meaning": "Systolic over diastolic pressure. The mean arterial pressure (MAP = two thirds diastolic plus one third systolic) shows how well organs are perfused.",
+        "why": "Fluid shifts in microgravity change blood pressure. Low pressure with symptoms, or a sharp rise, needs a person to look at it."
+      }
+    },
+    {
+      "metric_id": "sleep",
+      "title": "Sleep",
+      "input": "log",
+      "unit": "h",
+      "baseline_rule": "7-day average of logged nights (at least 3 nights)",
+      "tiers": {
+        "green": "7 hours or more on average",
+        "yellow": "6 to 7 hours on average",
+        "red": "less than 6 hours on average"
+      },
+      "persistence": "7-day average, never a single night",
+      "evidence_level": "SPACEFLIGHT_DATA",
+      "evidence_note": "Adults need 7-9 hours. ISS crews are scheduled about 8.5 hours but have historically averaged about 6 hours, which degrades vigilance and mood. Red below 6 hours would flag the typical ISS astronaut. That is intentional.",
+      "sources": [
+        "Astronaut sleep and neurobehavioral function: https://pmc.ncbi.nlm.nih.gov/articles/PMC8919197",
+        "NASA OCHMO-TB-041 Sleep Accommodations: https://www.nasa.gov/wp-content/uploads/2023/03/sleep-accomodations-technical-brief-ochmo.pdf"
+      ],
+      "limitation": "Logged by hand, so it is only as accurate as your entry. It is not derived from the band yet.",
+      "action": {
+        "yellow": "Protect your sleep window, dim lights before bed, and review the schedule.",
+        "red": "Ask for a schedule and lighting review: tell the crew medical officer / ground medical."
+      },
+      "stale_after_minutes": 2880,
+      "params": {
+        "window_nights": 7,
+        "min_nights": 3,
+        "green_hours": 7,
+        "yellow_hours": 6
+      },
+      "explain": {
+        "how": "Log when you went to bed and when you woke up, and rate how well you slept.",
+        "meaning": "Your average sleep over the last 7 nights.",
+        "why": "Short sleep slows reactions, lowers mood and weakens the immune system. About six hours a night, for weeks, is enough to show."
+      }
+    },
+    {
+      "metric_id": "orthostatic",
+      "title": "Orthostatic check",
+      "input": "log",
+      "unit": "mmHg",
+      "baseline_rule": "none (compares standing with lying down in the same check)",
+      "tiers": {
+        "green": "systolic drops less than 20 mmHg and diastolic less than 10 mmHg within 3 minutes of standing",
+        "yellow": "a drop of 20 mmHg systolic or 10 mmHg diastolic or more, without symptoms",
+        "red": "the same drop with dizziness, near-fainting, confusion or blurred vision, or any fainting"
+      },
+      "persistence": "measured at 1 and 3 minutes standing",
+      "evidence_level": "CLINICAL_GUIDELINE",
+      "evidence_note": "The definition of orthostatic hypotension is clinical. Applying it to Moon and Mars gravity is our hypothesis: no partial-gravity data was found. About 20% of astronauts have presyncope after 10-14 day flights.",
+      "sources": [
+        "Orthostatic hypotension (StatPearls): https://www.ncbi.nlm.nih.gov/books/NBK448192/",
+        "Post-spaceflight orthostatic hypotension: https://ntrs.nasa.gov/api/citations/20100033503/downloads/20100033503.pdf"
+      ],
+      "limitation": "Standing is meaningless in microgravity, so this check is only enabled in environments with gravity and when returning to gravity.",
+      "action": {
+        "yellow": "Lie down, recheck in about 5 minutes, and review hydration and intake.",
+        "red": "Lie down with your legs raised, then tell the crew medical officer / ground medical and escalate per protocol."
+      },
+      "stale_after_minutes": 4320,
+      "requires_gravity": true,
+      "params": {
+        "sbp_drop": 20,
+        "dbp_drop": 10,
+        "hr_rise_low": 10,
+        "hr_rise_high": 30,
+        "hr_high": 100
+      },
+      "explain": {
+        "how": "Lie flat for 5 minutes and take a reading, stand up and take readings after 1 and after 3 minutes. Have something to hold on to.",
+        "meaning": "How much your blood pressure falls when you stand. A small heart-rate rise with a big drop, or a very big rise, is flagged as well.",
+        "why": "Returning to gravity after weeks in space often brings dizziness on standing. It matters most on the Moon, on Mars and on return."
+      }
+    },
+    {
+      "metric_id": "symptoms",
+      "title": "Symptoms",
+      "input": "log",
+      "unit": "",
+      "baseline_rule": "none",
+      "tiers": {
+        "green": "nothing reported in the last 12 hours",
+        "yellow": "a symptom of severity 3 or more reported in the last 12 hours",
+        "red": "chest pain, fainting or a sudden vision change reported in the last 12 hours, at any severity"
+      },
+      "persistence": "12 hours",
+      "evidence_level": "OUR_HEURISTIC",
+      "evidence_note": "The symptom list is our own design, not a validated instrument.",
+      "sources": ["Astronaut Health Monitor spec, section 5.3"],
+      "limitation": "Only reflects what you log. A quiet log means nothing was reported, not that nothing is wrong.",
+      "action": {
+        "yellow": "Note when it started, rest, and keep logging how it changes.",
+        "red": "Tell the crew medical officer / ground medical now."
+      },
+      "stale_after_minutes": 720,
+      "params": {
+        "window_hours": 12,
+        "yellow_min_intensity": 3
+      },
+      "explain": {
+        "how": "Pick the symptom from the list on the Symptom Log page and rate how strong it is.",
+        "meaning": "A few symptoms are always worth a human's attention, however mild.",
+        "why": "Chest pain, fainting and a sudden change in vision can be signs of something serious, and no wearable can see them."
+      }
+    }
+  ],
+
+  "symptoms": [
+    { "id": "headache", "label": "Headache", "red_flag": false, "aliases": [], "hint": "If a cabin CO2 reading is available, check it." },
+    { "id": "dizziness", "label": "Dizziness", "red_flag": false, "aliases": ["lightheadedness"] },
+    { "id": "nausea", "label": "Nausea / motion sickness", "red_flag": false, "aliases": ["nausea", "motion sickness"] },
+    { "id": "vision_change", "label": "Sudden vision change", "red_flag": true, "aliases": ["vision change"] },
+    { "id": "gi", "label": "GI symptoms", "red_flag": false, "aliases": ["gi symptom"] },
+    { "id": "chest_pain", "label": "Chest pain", "red_flag": true, "aliases": ["chest discomfort"] },
+    { "id": "fainting", "label": "Fainting", "red_flag": true, "aliases": ["fainted", "passed out"] },
+    { "id": "shortness_of_breath", "label": "Shortness of breath", "red_flag": false, "aliases": ["breathlessness"] },
+    { "id": "fatigue", "label": "Fatigue", "red_flag": false, "aliases": [] },
+    { "id": "other", "label": "Other", "red_flag": false, "aliases": [] }
+  ],
+
+  "heart_symptoms": ["chest_pain", "fainting", "shortness_of_breath"],
+
+  "log_symptoms": [
+    { "id": "chest_pain", "label": "Chest pain", "effect": "red" },
+    { "id": "neurological", "label": "Weakness, speech or other neurological symptoms", "effect": "red" },
+    { "id": "fainting", "label": "Fainting", "effect": "red" },
+    { "id": "dizziness", "label": "Dizziness", "effect": "presyncope" },
+    { "id": "near_fainting", "label": "Near-fainting", "effect": "presyncope" },
+    { "id": "confusion", "label": "Confusion", "effect": "presyncope" },
+    { "id": "blurred_vision", "label": "Blurred vision", "effect": "presyncope" }
+  ],
+
+  "rules": [
+    {
+      "id": "volume_loss_or_infection",
+      "title": "Possible volume loss or infection",
+      "active": true,
+      "requires": ["bp", "hr_resting", "skin_temp"],
+      "when": "Low blood pressure, an elevated resting heart rate, and a raised skin temperature (or a core temperature of 38 °C or more) together.",
+      "evidence_level": "OUR_HEURISTIC",
+      "action": "Lie down, drink if you can, take a core temperature, and tell the crew medical officer / ground medical now: these three together are escalated faster than any one alone."
+    },
+    {
+      "id": "crew_stress",
+      "title": "Crew-stress flag",
+      "active": false,
+      "requires": ["sleep", "hr_resting", "who5"],
+      "when": "Short sleep, an elevated resting heart rate and a low WHO-5 score.",
+      "evidence_level": "OUR_HEURISTIC",
+      "inactive_reason": "Needs the WHO-5 questionnaire (phase 2)."
+    },
+    {
+      "id": "environmental_hypoxia",
+      "title": "Low SpO2 with low cabin oxygen",
+      "active": false,
+      "requires": ["spo2", "cabin_o2"],
+      "when": "Low blood oxygen while the cabin oxygen partial pressure is also low: the environmental alarm comes first.",
+      "evidence_level": "NASA_STANDARD",
+      "inactive_reason": "Needs a cabin oxygen sensor."
+    },
+    {
+      "id": "headache_co2",
+      "title": "Headache and cabin CO2",
+      "active": false,
+      "requires": ["symptoms", "cabin_co2"],
+      "when": "A headache is logged: show the cabin CO2 reading.",
+      "evidence_level": "NASA_STANDARD",
+      "inactive_reason": "Needs a cabin CO2 sensor."
+    },
+    {
+      "id": "defer_task",
+      "title": "Defer a safety-critical task",
+      "active": false,
+      "requires": ["kss", "pvt"],
+      "when": "Very sleepy (KSS 8 or more) or a worsening reaction test before a safety-critical task.",
+      "evidence_level": "OUR_HEURISTIC",
+      "inactive_reason": "Needs the KSS and the reaction test (phase 2)."
+    },
+    {
+      "id": "kss_pvt_mismatch",
+      "title": "Feeling alert, performing poorly",
+      "active": false,
+      "requires": ["kss", "pvt"],
+      "when": "The sleepiness scale says alert but the reaction test is poor: performance may be worse than it feels.",
+      "evidence_level": "OUR_HEURISTIC",
+      "inactive_reason": "Needs the KSS and the reaction test (phase 2)."
+    }
+  ]
+}
